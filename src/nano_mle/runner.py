@@ -7,6 +7,7 @@ import statistics
 import time
 from pathlib import Path
 
+from .agents import ModelUnavailable
 from .config import load_config
 from .controllers import controller
 from .contracts import create_contract, digest, source_manifest, verify_contract
@@ -214,7 +215,11 @@ class Runner:
                                           "error": " ".join(str(error).split())[:2000],
                                           **self.usage()})
             self.store.event("model_call_failed", id=call_id, method=method)
-            if retry or not isinstance(kwargs.get("context"), dict):
+            if retry:
+                raise
+            if isinstance(error, ModelUnavailable):  # no answer to show the model; ask again as is
+                return self.call(method, retry=True, **kwargs)
+            if not isinstance(kwargs.get("context"), dict):
                 raise
             context = {**kwargs["context"], "previous_answer_error": " ".join(str(error).split())[-2000:]}
             return self.call(method, retry=True, **{**kwargs, "context": context})
@@ -287,8 +292,14 @@ class Runner:
             summary = " ".join(result["error"].split())  # some messages start with a line break
             self.notify(f"  Repair {repair_number + 1}: {summary[:180]}")
             error = result.get("traceback", result["error"])
-            source = self.call("repair", kind=kind, intent=intent, source=source, error=error,
-                               context=self.context("repair", query=error, **scope))
+            try:
+                source = self.call("repair", kind=kind, intent=intent, source=source, error=error,
+                                   context=self.context("repair", query=error, **scope))
+            except ModelUnavailable as unavailable:
+                # The attempt's own failure stands; the run goes on without this repair.
+                self.store.event("repair_unavailable", owner_id=record["id"], error=str(unavailable)[:2000])
+                self.notify(f"  Repair call failed, keeping the failed attempt: {str(unavailable)[:180]}")
+                break
         return result, attempt
 
     def explore(self, question, stopping_condition, expansion_id=None, scope=None):
@@ -511,6 +522,12 @@ class Runner:
                 self.fail_active(str(error))
                 self.store.event("action_rejected", error=str(error))
                 self.notify(f"Action rejected: {error}")
+            except ModelUnavailable as error:
+                # A planner, writer or interpreter call got no answer twice: the action
+                # fails and counts, the run goes on. Controller calls still end the run.
+                self.fail_active(f"Model call failed: {error}")
+                self.store.event("action_failed", error=str(error)[:2000])
+                self.notify(f"Action failed, model call got no answer: {str(error)[:180]}")
 
     def final_submission(self, timeout):
         """Refit the best candidate and write the submission, once per run. It runs after

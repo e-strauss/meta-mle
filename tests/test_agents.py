@@ -1,3 +1,4 @@
+import pytest
 from nano_mle.agents import lm_settings
 
 
@@ -45,3 +46,24 @@ def test_usage_sums_every_lm_request_of_a_call():
     assert summed == {"input_tokens": 200, "output_tokens": 100, "reasoning_tokens": 60, "cached_tokens": 0,
                       "cost": 0.003, "lm_calls": 2}
     assert usage_of([{"usage": usage, "cost": None}])["cost"] is None
+
+
+def test_provider_errors_become_model_unavailable_and_parse_errors_do_not():
+    import dspy
+    from dspy.utils.exceptions import LMTransportError
+
+    from nano_mle.agents import DSPyBackend, ModelUnavailable
+
+    backend = object.__new__(DSPyBackend)  # without a live LM; only _call is exercised
+    backend.dspy, backend.lm, backend.adapter = dspy, dspy.LM("openai/gpt-test"), dspy.ChatAdapter()
+
+    def timed_out(**kwargs):
+        raise LMTransportError("read timed out waiting for headers: no bytes for 180s")
+
+    def malformed(**kwargs):
+        raise ValueError("Failed to parse field decision")
+
+    with pytest.raises(ModelUnavailable, match="no bytes for 180s"):
+        backend._call(timed_out)
+    with pytest.raises(ValueError):
+        backend._call(malformed)

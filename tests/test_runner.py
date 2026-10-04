@@ -4,6 +4,7 @@ import json
 import pandas as pd
 import pytest
 
+from nano_mle.agents import ModelUnavailable
 from nano_mle.models import Budget, EvaluationSpec, Task
 from nano_mle.runner import Runner, initialize
 from nano_mle.store import Store
@@ -404,3 +405,57 @@ def test_model_calls_record_the_backend_token_usage(tmp_path):
                for c in calls if c["method"] == "control")
     # The runner clears usage before each call, so a call that reports none records none.
     assert all("usage" not in c for c in calls if c["method"] != "control")
+
+
+class UnavailableBackend(ScriptedBackend):
+    """The provider gives no answer to the calls named in `fail`; each call is tried twice."""
+
+    def __init__(self, fail):
+        self.fail, self.seen = fail, []
+
+    def implement(self, kind, context, intent):
+        self.seen.append(("implement", kind, "previous_answer_error" in context))
+        if ("implement", kind) in self.fail:
+            raise ModelUnavailable("read timed out waiting for headers")
+        if kind == "pipeline" and ("repair", kind) in self.fail:
+            return "def build(:\n"  # fails the lint, so the harness asks for a repair
+        return super().implement(kind, context, intent)
+
+    def repair(self, kind, context, intent, source, error):
+        self.seen.append(("repair", kind, "previous_answer_error" in context))
+        raise ModelUnavailable("read timed out waiting for headers")
+
+
+def unavailable_workspace(tmp_path):
+    train = tmp_path / "train.csv"
+    pd.DataFrame({"a": range(18), "b": [1, 2, 3] * 6,
+                  "target": [2 * i + 0.1 for i in range(18)]}).to_csv(train, index=False)
+    task = Task(description="Independent regression data", sources={"train": str(train)}, target="target")
+    root = tmp_path / "workspace"
+    initialize(root, task, Budget(max_expansions=2, max_evaluations=4, max_repairs=1))
+    return root
+
+
+def test_an_unanswered_writer_call_fails_its_action_and_the_run_goes_on(tmp_path):
+    workspace = unavailable_workspace(tmp_path)
+    backend = UnavailableBackend({("implement", "pipeline")})
+    Runner(workspace, backend).run(submit=False)
+    store = Store(workspace)
+    expansions = store.records("expansion")
+    assert store.meta("state") == "complete"
+    assert [e["status"] for e in expansions] == ["failed", "failed"]
+    assert all(e["error"].startswith("Model call failed") for e in expansions)
+    # Retried once as is: the model is not shown a provider error as its own mistake.
+    assert backend.seen.count(("implement", "pipeline", False)) == 4
+    assert store.db.execute("SELECT 1 FROM events WHERE kind=?", ("action_failed",)).fetchone()
+
+
+def test_an_unanswered_repair_keeps_the_failed_attempt_as_a_failed_candidate(tmp_path):
+    workspace = unavailable_workspace(tmp_path)
+    backend = UnavailableBackend({("repair", "pipeline")})
+    Runner(workspace, backend).run(submit=False)
+    store = Store(workspace)
+    assert store.meta("state") == "complete"
+    assert [c["status"] for c in store.records("candidate")] == ["failed", "failed"]
+    assert backend.seen.count(("repair", "pipeline", False)) == 4
+    assert store.db.execute("SELECT 1 FROM events WHERE kind=?", ("repair_unavailable",)).fetchone()

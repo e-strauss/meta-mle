@@ -7,6 +7,11 @@ from typing import Protocol
 from .models import Decision, Finding, Proposal
 
 
+class ModelUnavailable(RuntimeError):
+    """The provider gave no answer (timeout, connection, server or rate-limit error), as
+    opposed to an answer the harness could not use."""
+
+
 def lm_settings(model: str, max_tokens: int, timeout: int = 600, reasoning_effort: str | None = None) -> dict:
     settings = {"max_tokens": max_tokens, "temperature": 0.2, "num_retries": 0,
                 "timeout": timeout, "cache": False}
@@ -55,6 +60,7 @@ class Backend(Protocol):
     def interpret(self, context: dict, question: str, result: dict) -> list[Finding]: ...
     def summarize(self, context: dict, instruction: str) -> str: ...  # for memories
     # Optional: `usage`, the token usage of the latest call (see usage_of), or None.
+    # Raise ModelUnavailable when the provider gives no answer.
 
 
 class DSPyBackend:
@@ -122,10 +128,14 @@ class DSPyBackend:
 
     def _call(self, module, **kwargs):
         # The LM history holds only this call's requests, so usage covers a failed parse too.
+        from dspy.utils.exceptions import LMRateLimitError, LMServerError, LMTimeoutError, LMTransportError
+
         self.lm.history.clear()
         try:
             with self.dspy.context(lm=self.lm, adapter=self.adapter):
                 return module(**{k: json.dumps(v) if isinstance(v, (dict, list)) else v for k, v in kwargs.items()})
+        except (LMTransportError, LMTimeoutError, LMServerError, LMRateLimitError) as error:
+            raise ModelUnavailable(str(error)) from error
         finally:
             self.usage = usage_of(self.lm.history)
 

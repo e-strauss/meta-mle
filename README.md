@@ -60,7 +60,12 @@ uv run pytest      # offline test suite
    (completion cap per call including reasoning, default 64,000; with high reasoning
    a lower cap cuts plans off mid-file, which then costs a repair) and
    `--request-timeout` (seconds, default 600; with high reasoning a long plan or repair
-   can take over 3 minutes before the first byte). Provider retries are disabled. The run
+   can take over 3 minutes before the first byte). Provider retries are disabled; the
+   harness asks once more itself, and both tries count as model calls. If a planner,
+   writer, repairer or interpreter call gets no answer twice (timeout, connection,
+   server or rate-limit error), its action fails and the run goes on; an unanswered
+   repair leaves the attempt failed. An unanswered controller call ends the run as
+   interrupted, so it can be resumed. The run
    ends with a [submission](#submission) of the best candidate unless `--no-submit`
    is given; put the prediction rows and the sample submission in the task's sources.
 
