@@ -193,24 +193,23 @@ def test_config_defaults_and_unknown_keys(tmp_path, monkeypatch):
 
 
 def test_data_volume_study_prompt_follows_config(tmp_path, monkeypatch):
-    import importlib
     from nano_mle import config, prompts
 
-    for enabled in (True, False):
-        path = tmp_path / f"{enabled}.toml"
-        path.write_text(f"[prompts]\ndata_volume_study = {str(enabled).lower()}\n")
-        monkeypatch.setenv("NANO_MLE_CONFIG", str(path))
-        config.load_config.cache_clear()
-        importlib.reload(prompts)
-        assert ("Data volume study" in prompts.PLAN_INSTRUCTIONS) == enabled
-        assert ("Data volume study" in prompts.CONTROL_INSTRUCTIONS) == enabled
-        # The population check is not optional: every role that shapes the lock sees it.
-        for instructions in (prompts.PLAN_INSTRUCTIONS, prompts.PLANNING_INSTRUCTIONS,
-                             prompts.CONTROL_INSTRUCTIONS):
-            assert "Population check" in instructions
+    # The older flat key [prompts] data_volume_study still works.
+    for text in ("[prompts]\ndata_volume_study = {}\n", "[prompts.default]\ndata_volume_study = {}\n"):
+        for enabled in (True, False):
+            path = tmp_path / "prompts.toml"
+            path.write_text(text.format(str(enabled).lower()))
+            monkeypatch.setenv("NANO_MLE_CONFIG", str(path))
+            config.load_config.cache_clear()
+            prompt_set = prompts.prompts("default", config.load_config()["prompts"]["default"])
+            assert ("Data volume study" in prompt_set.writer()) == enabled
+            assert ("Data volume study" in prompt_set.control()) == enabled
+            # The population check is not optional: every role that shapes the lock sees it.
+            for instructions in prompt_set.rendered().values():
+                assert "Population check" in instructions
     monkeypatch.undo()
     config.load_config.cache_clear()
-    importlib.reload(prompts)
 
 
 def test_plans_read_only_task_sources(tmp_path):
@@ -355,6 +354,6 @@ def test_hardware_comes_from_the_config_only(tmp_path, monkeypatch):
 def test_model_choice_conventions_reach_controller_and_planner():
     from nano_mle import prompts
 
-    for instructions in (prompts.PLAN_INSTRUCTIONS, prompts.PLANNING_INSTRUCTIONS, prompts.CONTROL_INSTRUCTIONS):
+    for instructions in prompts.prompts().rendered().values():
         assert "Model families" in instructions and "context.hardware" in instructions
         assert "Training pool" in instructions

@@ -13,7 +13,7 @@ def resolve_settings(args):
     """Existing defaults, then the preset, then explicitly supplied init flags."""
     from .models import Budget
 
-    defaults = {"controller": "llm", "policy": "greedy", "memory": "window",
+    defaults = {"controller": "llm", "policy": "greedy", "memory": "window", "prompts": "default",
                 "max_requested_explorations": Budget.model_fields["max_requested_explorations"].default}
     defaults.update(PRESETS.get(args.preset, {}))
     return {key: getattr(args, key) if getattr(args, key) is not None else value
@@ -52,6 +52,8 @@ def main():
                       help="Parent selection (default: greedy)")
     init.add_argument("--memory", choices=["window", "full", "aide"],
                       help="What model calls see of the run's history; parameters in nano-mle.toml [memory.<name>]")
+    init.add_argument("--prompts", help="Prompt set of controller, planner and writer (default: default); "
+                      "parameters in nano-mle.toml [prompts.<name>]")
     init.add_argument("--max-expansions", type=int, default=6)
     init.add_argument("--max-explorations", type=int, default=8)
     init.add_argument("--max-requested-explorations", type=int,
@@ -103,7 +105,7 @@ def main():
                         execution_timeout=args.execution_timeout,
                         max_model_calls=args.max_model_calls, max_wall_seconds=args.time_budget)
         initialize(args.workspace.resolve(), load_task(args.task), budget, settings["policy"],
-                   settings["memory"], settings["controller"])
+                   settings["memory"], settings["controller"], settings["prompts"])
         print(f"Initialized {args.workspace.resolve()}")
     elif args.command == "run":
         from .agents import DSPyBackend

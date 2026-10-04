@@ -4,7 +4,9 @@ import json
 import re
 from typing import Protocol
 
+from .config import load_config
 from .models import Decision, Finding, Proposal
+from .prompts import prompts
 
 
 class ModelUnavailable(RuntimeError):
@@ -61,6 +63,7 @@ class Backend(Protocol):
     def summarize(self, context: dict, instruction: str) -> str: ...  # for memories
     # Optional: `usage`, the token usage of the latest call (see usage_of), or None.
     # Raise ModelUnavailable when the provider gives no answer.
+    # Optional: use_prompts(prompt_set), called with the workspace's prompt set.
 
 
 class DSPyBackend:
@@ -68,8 +71,6 @@ class DSPyBackend:
         import os
         import dspy
         from dotenv import load_dotenv
-
-        from .prompts import CONTROL_INSTRUCTIONS, PLAN_INSTRUCTIONS, PLANNING_INSTRUCTIONS
 
         load_dotenv()
         self.model = model if not reasoning_effort else f"{model} (reasoning {reasoning_effort})"
@@ -111,11 +112,7 @@ class DSPyBackend:
             result: str = dspy.InputField()
             findings: list[Finding] = dspy.OutputField()
 
-        self.controller = dspy.Predict(Control.with_instructions(CONTROL_INSTRUCTIONS))
-        self.planner = dspy.Predict(Plan.with_instructions(PLANNING_INSTRUCTIONS))
-        self.writer = dspy.Predict(Write.with_instructions(PLAN_INSTRUCTIONS))
-        self.repairer = dspy.Predict(Repair.with_instructions(
-            PLAN_INSTRUCTIONS + "\nRepair the error while preserving the planned experiment."))
+        self.signatures = {"control": Control, "planning": Plan, "writer": Write, "repair": Repair}
         self.interpreter = dspy.Predict(Interpret)
 
         class Summarize(dspy.Signature):
@@ -125,6 +122,15 @@ class DSPyBackend:
             summary: str = dspy.OutputField()
 
         self.summarizer = dspy.Predict(Summarize)
+        self.use_prompts(prompts("default", load_config()["prompts"]["default"]))
+
+    def use_prompts(self, prompt_set):
+        """Instructions come from the workspace's prompt set; the runner sets it at start."""
+        texts = prompt_set.rendered()
+        self.controller = self.dspy.Predict(self.signatures["control"].with_instructions(texts["control"]))
+        self.planner = self.dspy.Predict(self.signatures["planning"].with_instructions(texts["planning"]))
+        self.writer = self.dspy.Predict(self.signatures["writer"].with_instructions(texts["writer"]))
+        self.repairer = self.dspy.Predict(self.signatures["repair"].with_instructions(texts["repair"]))
 
     def _call(self, module, **kwargs):
         # The LM history holds only this call's requests, so usage covers a failed parse too.

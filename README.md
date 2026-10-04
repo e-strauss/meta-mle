@@ -89,11 +89,12 @@ the configuration it used in its workspace metadata.
 | `[memory.<name>] …` | memory defaults | Parameters of a memory, read at `init` (e.g. `[memory.window] leaderboard = 8`, `[memory.full] max_chars = 400000`). |
 | `[policy.<name>] …` | policy defaults | Parameters saved at `init`: draft count, UCT exploration coefficient or MCGS seed. |
 | `[controller.auto] time_margin` | 1.0 | Auto stops when the remaining time is less than this factor times the longest of the last 3 expansions' worker time (repairs included). 0 disables the estimate. |
-| `[prompts] data_volume_study` | true | Adds the data-volume-study convention for the planner and controller: for large sources, explore which rows and table parts are needed before the lock, and measure a learning curve over training-set size after it. |
+| `[prompts.<name>] …` | prompt-set defaults | Parameters of a [prompt set](#prompt-sets), read at `init`. The default set's `data_volume_study` (true) adds the data-volume-study convention for the planner and controller: for large sources, explore which rows and table parts are needed before the lock, and measure a learning curve over training-set size after it. The older `[prompts] data_volume_study` key still works. |
 
 ### Agent configurations
 
-Controller, policy and memory are independent choices set at `init`. The default
+Controller, policy, memory and [prompt set](#prompt-sets) are independent choices set
+at `init`. The default
 remains `--controller llm --policy greedy --memory window`. For a new task,
 `--policy draft-greedy` is recommended: greedy expands the first candidate's line for
 the whole run, so the first model family tends to stay, while draft-greedy drafts
@@ -146,9 +147,32 @@ search steps; our `max_repairs` limits repairs inside one expansion and is not a
 equivalent setting. Grids create several candidates per expansion, so choose an
 evaluation budget large enough for them. The preset disables planner-requested
 explorations; a request is rejected and its failed expansion still counts.
-`[prompts] data_volume_study` is a prompt setting, not part of the preset; its
+`[prompts.default] data_volume_study` is a prompt setting, not part of the preset; its
 learning-curve convention can take up a draft, so disable it in a separate config
 for runs meant to be closer to AIDE.
+
+### Prompt sets
+
+The instructions of the controller, planner, writer and repairer come from a prompt
+set, chosen like the other components at `init --prompts NAME` (default: `default`)
+with parameters from `[prompts.NAME]`. A set is a class of named fragments (`goal`,
+the `conventions` dict of rules, `control_rules`, `planning_rules`, `writer_rules`,
+`guide_notes`), and its methods assemble each role's instructions from them, so a
+changed rule reaches every role that uses it. A variant subclasses a set, overrides
+what it changes and is registered in `prompts.PROMPTS`:
+
+```python
+class NoModelGuidance(Prompts):
+    name = "no-model-guidance"
+    conventions = {k: v for k, v in Prompts.conventions.items() if k != "model_families"}
+
+PROMPTS["no-model-guidance"] = NoModelGuidance
+```
+
+The plan contract (`plans.GUIDE`) is enforced by the harness and stays the same in
+every set; a set may add `guide_notes` after it. The workspace records the set's name
+and parameters, and at every run start the rendered texts (`prompt_texts`) and their
+hashes (in the `run_started` event), since the code of a set may change between runs.
 
 ### CPU setup and parallel runs
 
@@ -509,7 +533,7 @@ still shows which phase was running.
 | `controllers.py` | LLM and automatic next-action strategies. |
 | `memory.py` | Memory protocol, read-only journal view, `window` and `full` memories. |
 | `agents.py` | DSPy backend: controller, planner, writer, repairer and interpreter signatures. |
-| `prompts.py` | Instructions for the controller, planner and writer. |
+| `prompts.py` | Prompt sets: named fragments assembled into the controller, planner, writer and repairer instructions; registry of variants. |
 | `plans.py` | Plan guide shown to the writer, source lint, locked-setup export, grid-variant resolution. |
 | `models.py` | Pydantic types: task, decisions, proposals, findings, budget. |
 | `execution.py` | Runs one plan in a killable subprocess with a timeout. |

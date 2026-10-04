@@ -26,7 +26,10 @@ gpus = []            # e.g. ["NVIDIA A100-SXM4-80GB, 80 GB"]
 # functions defined in the plan and lambdas are rejected either way (no UDFs).
 restrict_primitives = false
 
-[prompts]
+# Prompt set parameters, read at `nano-mle init --prompts <name>` (default: default)
+# and recorded in the workspace. A variant registered in prompts.PROMPTS takes its
+# parameters from [prompts.<its name>].
+[prompts.default]
 # Add the "data volume study" convention (planner and controller): for large sources,
 # decide the modelled population with evidence, i.e. explore which rows and table
 # parts are needed before the lock and measure a learning curve after it.

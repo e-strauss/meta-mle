@@ -16,6 +16,7 @@ from .contracts import digest, source_manifest
 from .execution import run_plan
 from .models import Task
 from .plans import resolve_source, validate_source
+from .prompts import chosen_prompts
 from .search import valid
 from .store import Store, new_id
 
@@ -58,6 +59,8 @@ def submit(workspace: Path, backend, candidate_id=None, task: Task | None = None
         except BlockingIOError:
             raise ValueError("A runner owns this workspace; submit after it stops") from None
         store = Store(workspace)
+        if hasattr(backend, "use_prompts"):
+            backend.use_prompts(chosen_prompts(store))
         try:
             return write_submission(workspace, store, backend, candidate_id, task, max_repairs, timeout, notify)
         finally:

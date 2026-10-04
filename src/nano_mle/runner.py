@@ -15,6 +15,7 @@ from .execution import run_plan
 from .models import Budget, Task
 from .libraries import record_missing
 from .memory import Journal, memory
+from .prompts import chosen_prompts, digests, prompts
 from .plans import MissingLibrary, evaluation_source, resolve_source, validate_source
 from .search import policy, update_stats, valid
 from .store import Store, new_id
@@ -26,7 +27,7 @@ class ModelCallBudgetExceeded(RuntimeError):
 
 
 def initialize(workspace: Path, task: Task, budget: Budget, search_policy="greedy", memory_name="window",
-               controller_name="llm"):
+               controller_name="llm", prompts_name="default"):
     manifest = source_manifest(task)
     config = load_config()
     params = config["memory"].get(memory_name, {})
@@ -35,6 +36,8 @@ def initialize(workspace: Path, task: Task, budget: Budget, search_policy="greed
     memory(memory_name, params)  # unknown names or parameters fail before anything is written
     policy(search_policy, budget.max_expansions, policy_params)
     controller(controller_name, controller_params)
+    prompt_params = config["prompts"].get(prompts_name, {})
+    prompts(prompts_name, prompt_params)
     workspace.mkdir(parents=True, exist_ok=False)
     (workspace / "artifacts").mkdir()
     store = Store(workspace)
@@ -47,10 +50,12 @@ def initialize(workspace: Path, task: Task, budget: Budget, search_policy="greed
         store.set_meta("controller", controller_name)
         store.set_meta("controller_params", controller_params)
         store.set_meta("memory", {"name": memory_name, "params": params})
+        store.set_meta("prompts", {"name": prompts_name, "params": prompt_params})
         store.set_meta("state", "ready")
         store.set_meta("actions", 0)
         store.set_meta("search_stats", {})
-        store.event("initialized", policy=search_policy, memory=memory_name, controller=controller_name)
+        store.event("initialized", policy=search_policy, memory=memory_name, controller=controller_name,
+                    prompts=prompts_name)
         export_workspace(store)
     finally:
         store.close()
@@ -64,6 +69,7 @@ def export_workspace(store):
                 "policy_params": store.meta("policy_params", {}),
                 "controller": store.meta("controller", "llm"),
                 "controller_params": store.meta("controller_params", {}),
+                "prompts": store.meta("prompts", {"name": "default", "params": {}}),
                 "elapsed_s": store.meta("elapsed_s"),
                 "state": store.meta("state"), "evaluation": store.meta("contract")}
     (workspace / "workspace.json").write_text(json.dumps(metadata, indent=2))
@@ -130,6 +136,9 @@ class Runner:
                                      self.store.meta("controller_params", {}))
         chosen = self.store.meta("memory", {"name": "window", "params": {}})  # workspaces before memories
         self.memory = memory(chosen["name"], chosen["params"])
+        self.prompts = chosen_prompts(self.store)
+        if hasattr(self.backend, "use_prompts"):
+            self.backend.use_prompts(self.prompts)
         self.memory.ask = lambda context, instruction: self.call("summarize", context=context, instruction=instruction)
         self.store.listeners.append(self.memory.observe)
         self.notify = print
@@ -562,7 +571,11 @@ class Runner:
                     model = getattr(self.backend, "model", type(self.backend).__name__)
                     self.store.set_meta("model", model)
                     self.store.set_meta("config", load_config())
-                    self.store.event("run_started", model=model, config=load_config())
+                    # The exact instructions of this session: code may change between sessions.
+                    texts = self.prompts.rendered()
+                    self.store.set_meta("prompt_texts", texts)
+                    self.store.event("run_started", model=model, config=load_config(),
+                                     prompts={"name": self.prompts.name, "sha256": digests(texts)})
                     self.store.set_meta("state", "running")
                     self.tick()  # time while the run was stopped does not count
                     try:

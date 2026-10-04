@@ -15,7 +15,8 @@ DEFAULTS = {
     # parallel the node holds more than one run may use. 0 or [] means not stated.
     "hardware": {"memory_gb": 0, "gpus": []},
     "plans": {"restrict_primitives": False},
-    "prompts": {"data_volume_study": True},
+    # Parameters per prompt set, e.g. [prompts.default] data_volume_study = false.
+    "prompts": {"default": {"data_volume_study": True}},
     # Parameters per memory, e.g. [memory.window] leaderboard = 8; empty means the
     # memory's own defaults (see memory.py).
     "memory": {"window": {}, "full": {}, "aide": {"explorations": 4}},
@@ -41,12 +42,18 @@ def load_config() -> dict:
     config = {}
     for section, values in DEFAULTS.items():
         given = loaded.get(section, {})
-        extra = set(given) - set(values)
+        if section == "prompts" and isinstance(given.get("data_volume_study"), bool):
+            # Older files: [prompts] data_volume_study = ..., now [prompts.default].
+            given = {**given, "default": {**given.get("default", {}),
+                                          "data_volume_study": given["data_volume_study"]}}
+            del given["data_volume_study"]
+        # Prompt sets are open: a registered variant may take parameters by its name.
+        extra = set(given) - set(values) if section != "prompts" else set()
         if extra:
             raise ValueError(f"Unknown keys in [{section}] of {path}: {sorted(extra)}")
-        if section in ("memory", "policy", "controller"):
-            config[section] = {name: {**params, **given.get(name, {})}
-                               for name, params in values.items()}
+        if section in ("memory", "policy", "controller", "prompts"):
+            config[section] = {name: {**values.get(name, {}), **given.get(name, {})}
+                               for name in {**values, **given}}
         else:
             config[section] = {**values, **given}
     return config
