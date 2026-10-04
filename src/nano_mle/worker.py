@@ -249,8 +249,9 @@ def final(result, namespace, request, directory, phases, started):
         raise ValueError("A final plan returns {'submission': DataOp}")
     fit_env, predict_env, fmt = namespace.get("FIT"), namespace.get("PREDICT"), namespace.get("FORMAT")
     for name, env in (("FIT", fit_env), ("PREDICT", predict_env)):
-        if not isinstance(env, dict) or not env or not all(isinstance(v, str) for v in env.values()):
-            raise ValueError(f"{name} must map skrub.var names to task source paths")
+        # Empty when the plan selects its rows with skrub.eval_mode() instead of vars.
+        if not isinstance(env, dict) or not all(isinstance(v, str) for v in env.values()):
+            raise ValueError(f"{name} must map skrub.var names to task source paths ({{}} if none)")
     if set(fit_env) != set(predict_env):
         raise ValueError("FIT and PREDICT must bind the same skrub.var names")
     for path in [*fit_env.values(), *predict_env.values(), *([fmt] if fmt else [])]:
@@ -264,7 +265,8 @@ def final(result, namespace, request, directory, phases, started):
     if not isinstance(table, pd.DataFrame) or table.empty:
         raise ValueError("The submission DataOp must produce a nonempty DataFrame at prediction time")
     checks, warnings = [], []
-    suffix = ".csv"
+    # Without a format file the plan may ask for tab-separated output.
+    suffix = ".tsv" if namespace.get("OUTPUT_SEP") == "\t" else ".csv"
     if fmt:
         sample = read_table(fmt)
         suffix = Path(fmt).suffix or ".csv"

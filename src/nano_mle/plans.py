@@ -56,6 +56,16 @@ Plan contract (checked by the harness):
   at prediction time (the target) with errors="ignore". build() returns
   {'submission': DataOp}: the predictions formatted as the submission table, with
   FORMAT's columns. No CV, no choose_from, no scoring.
+  When the rows to fit on and the rows to predict come from different sources or
+  formats, read both as recorded sources and select them by mode:
+  rows = skrub.eval_mode().skb.match({'predict': predict_rows}, default=fit_rows),
+  derive X and y from rows (y is evaluated only when fitting) and set FIT = PREDICT = {}.
+  Without a FORMAT file, set OUTPUT_SEP = '\t' when the task asks for TSV output.
+  X.skb.apply(model, y=y) yields the model's predictions aligned with X's rows, with no
+  key columns: attach keys with rows[['key']].assign(...) or let the estimator's
+  predict return a DataFrame with the key. For top-k outputs (rankings, multi-label),
+  predict k columns per row and reshape them into the long table with DataOps (one
+  slice per rank, .skb.concat, a merge to map ids).
 - Named skrub.choose_from grids become one candidate per variant (within the
   evaluation budget). Children receive the parent's resolved configuration.
 - Return code without markdown fences. No credentials, no caching. Pipelines and

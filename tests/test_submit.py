@@ -121,3 +121,78 @@ def test_run_without_submit_writes_none(ready):
     workspace, paths = ready
     Runner(workspace, SearchThenFinal(FINAL.format(**paths))).run()
     assert Store(workspace).records("submission") == []
+
+
+class FlakyWriter(FinalBackend):
+    """The first two writer answers cannot be parsed; the repairer then returns `source`."""
+
+    def __init__(self, source):
+        super().__init__(source)
+        self.implements, self.repairs = 0, []
+
+    def implement(self, kind, context, intent):
+        self.implements += 1
+        raise ValueError("Adapter ChatAdapter failed to parse the LM response")
+
+    def repair(self, kind, context, intent, source, error):
+        self.repairs.append(error)
+        return self.source
+
+
+def test_unusable_writer_answers_cost_an_attempt_not_the_submission(finished):
+    workspace, task, paths = finished
+    backend = FlakyWriter(FINAL.format(**paths))
+    record = submit(workspace, backend, task=task, max_repairs=2, notify=lambda *_: None)
+    # Each of the 3 attempts asks the writer twice; nothing ever ran, so there is no
+    # source to repair and every attempt re-implements.
+    assert backend.implements == 6 and not backend.repairs
+    assert len(record["attempt_ids"]) == 3
+    assert record["status"] == "failed" and "failed twice" in record["result"]["error"]
+
+
+def test_repairs_get_the_traceback_and_a_failed_repair_call_is_retried(finished):
+    workspace, task, paths = finished
+    broken = FINAL.format(**paths).replace('rows["target"]', 'rows["no_such_column"]')
+
+    class Writer(FinalBackend):
+        repairs = []
+
+        def repair(self, kind, context, intent, source, error):
+            self.repairs.append(error)
+            if len(self.repairs) <= 2:
+                raise ValueError("Adapter ChatAdapter failed to parse the LM response")
+            return FINAL.format(**paths)
+
+    backend = Writer(broken)
+    record = submit(workspace, backend, task=task, max_repairs=2, notify=lambda *_: None)
+    assert record["status"] == "ok", record
+    assert "Traceback" in backend.repairs[0] and "no_such_column" in backend.repairs[0]
+
+
+def test_final_plans_may_select_fit_and_prediction_rows_by_mode(finished):
+    workspace, task, paths = finished
+    source = f'''import pandas as pd
+import skrub
+from sklearn.linear_model import Ridge
+
+FIT = {{}}
+PREDICT = {{}}
+FORMAT = None
+OUTPUT_SEP = "\\t"
+
+
+def build():
+    fit_rows = skrub.as_data_op({paths["train"]!r}).skb.apply_func(pd.read_csv)
+    predict_rows = skrub.as_data_op({paths["test"]!r}).skb.apply_func(pd.read_csv)
+    rows = skrub.eval_mode().skb.match({{"predict": predict_rows}}, default=fit_rows)
+    y = rows["target"].skb.mark_as_y()
+    X = rows.drop(columns=["id", "target"], errors="ignore").skb.mark_as_X()
+    pred = X.skb.apply(Ridge(), y=y)
+    return {{"submission": rows[["id"]].assign(target=pred)}}
+'''
+    record = submit(workspace, FinalBackend(source), task=task, max_repairs=0, notify=lambda *_: None)
+    assert record["status"] == "ok", record
+    info = record["result"]["submission"]
+    assert info["path"].endswith(".tsv")
+    table = pd.read_csv(info["path"], sep="\t")
+    assert len(table) == 20 and table["id"].min() == 1000

@@ -11,6 +11,7 @@ import fcntl
 import json
 from pathlib import Path
 
+from .agents import ModelUnavailable
 from .contracts import digest, source_manifest
 from .execution import run_plan
 from .models import Task
@@ -86,32 +87,57 @@ def write_submission(workspace, store, backend, candidate_id=None, task=None, ma
     calls = []
 
     def call(method, **kwargs):
-        source = getattr(backend, method)(**kwargs)
-        (directory / f"{method}_{len(calls)}.json").write_text(
-            json.dumps({"inputs": kwargs, "output": source}, indent=2))
-        calls.append(method)
-        return source
+        """One writer call, asked again once if the answer is unusable or missing. Returns
+        (source, None), or (None, error) so a failed call costs an attempt, not the run."""
+        error = None
+        for retry in (False, True):
+            if retry:  # show the model its own error unless the provider gave no answer
+                kwargs = {**kwargs, "context": kwargs["context"] if isinstance(error, ModelUnavailable) else
+                          {**kwargs["context"], "previous_answer_error": " ".join(str(error).split())[-2000:]}}
+            try:
+                source = getattr(backend, method)(**kwargs)
+            except Exception as failure:
+                error = failure
+                (directory / f"{method}_{len(calls)}.json").write_text(
+                    json.dumps({"inputs": kwargs, "error": " ".join(str(failure).split())[:2000]}, indent=2))
+                calls.append(method)
+                continue
+            (directory / f"{method}_{len(calls)}.json").write_text(
+                json.dumps({"inputs": kwargs, "output": source}, indent=2))
+            calls.append(method)
+            return source, None
+        return None, f"Writer call failed twice: {' '.join(str(error).split())[:1000]}"
 
     notify(f"Submission for {candidate['id']} (score {candidate['score']:.5f})")
-    source = call("implement", kind="final", context=context, intent=intent)
+    source, failure = call("implement", kind="final", context=context, intent=intent)
+    last_source, last_error = None, None
     result = {"status": "failed", "error": "No attempt executed"}
     for repair_number in range(max_repairs + 1):
         attempt = directory / new_id("attempt")
         request = {"kind": "final", "task": task.model_dump(), "sources": sources}
-        try:
-            validate_source(source)
-            result = run_plan(attempt, source, request, timeout)
-        except (SyntaxError, ValueError) as error:
+        if source is None:  # the writer gave no usable plan; nothing to execute
             attempt.mkdir(parents=True, exist_ok=True)
-            (attempt / "plan.py").write_text(source)
-            result = {"status": "failed", "error": str(error)}
+            result = {"status": "failed", "error": failure}
             (attempt / "response.json").write_text(json.dumps(result))
+        else:
+            try:
+                validate_source(source)
+                result = run_plan(attempt, source, request, timeout)
+            except (SyntaxError, ValueError) as error:
+                attempt.mkdir(parents=True, exist_ok=True)
+                (attempt / "plan.py").write_text(source)
+                result = {"status": "failed", "error": str(error)}
+                (attempt / "response.json").write_text(json.dumps(result))
+            last_source, last_error = source, result.get("traceback") or result.get("error")
         record["attempt_ids"].append(attempt.name)
         if result["status"] == "ok" or repair_number == max_repairs:
             break
         notify(f"  Repair {repair_number + 1}: {' '.join(result['error'].split())[:300]}")
-        source = call("repair", kind="final", context=context, intent=intent, source=source,
-                      error=result["error"])
+        if last_source is None:
+            source, failure = call("implement", kind="final", context=context, intent=intent)
+        else:
+            source, failure = call("repair", kind="final", context=context, intent=intent, source=last_source,
+                                   error=last_error)
     record.update(status=result["status"], result=result,
                   model_calls=len(calls), path=str(directory.relative_to(workspace)))
     store.put("submission", record)

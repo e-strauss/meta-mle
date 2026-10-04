@@ -199,15 +199,22 @@ completed workspace again submits only if no submission succeeded yet.
 same on its own, e.g. for another candidate or an updated task file.
 
 The harness takes the best candidate (or the named one) and resolves its winning grid
-variant. One writer call (with
-repairs) re-roots the plan so it can be applied to new rows: rows that differ between
-fitting and predicting are read through `skrub.var` holding a path, bound by the
-plan's `FIT` and `PREDICT` dicts. The harness fits once on `FIT`, predicts on
-`PREDICT`, checks columns, keys and row count against `FORMAT` (the sample
-submission) and writes `submission/<id>/attempt_*/submission.csv`. The writer sees
-the first lines of each text source. `--task` passes an updated task file that adds
-the prediction rows and the sample submission as sources. Submissions are never
-scored and never become candidates.
+variant. One writer call (with repairs) re-roots the plan so it can be applied to new
+rows. Rows that differ between fitting and predicting are read through `skrub.var`
+holding a path, bound by the plan's `FIT` and `PREDICT` dicts. When they come from
+different sources or formats, the plan reads both and selects them with
+`skrub.eval_mode().skb.match({'predict': predict_rows}, default=fit_rows)`, leaving
+`FIT` and `PREDICT` empty. The harness fits once, predicts, checks columns, keys and
+row count against `FORMAT` (the sample submission) and writes
+`submission/<id>/attempt_*/submission.csv`, or `.tsv` when the plan sets
+`OUTPUT_SEP = '\t'` and has no format file. The writer sees the first lines of each
+text source and a note on turning per-row predictions into long top-k tables.
+`--task` passes an updated task file that adds the prediction rows and the sample
+submission as sources. Submissions are never scored and never become candidates.
+
+A writer answer that cannot be used (unparseable, or the provider gives none) is
+asked for again once; if that fails too, it costs one attempt and the next attempt
+re-implements or repairs. Repairs see the full traceback.
 
 ## How a run works
 
