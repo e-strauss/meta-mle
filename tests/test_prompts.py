@@ -37,6 +37,22 @@ def test_a_variant_overrides_one_fragment_for_every_role():
     assert prompts.digests(default) != prompts.digests(variant)
 
 
+def test_frozen_set_keeps_its_texts():
+    # oct04 is the default set as of 2026-10-04, kept unchanged for ablations.
+    assert prompts.digests(prompts.prompts("oct04").rendered()) == {
+        "control": "36b6c24384650f6c", "planning": "95f580cd222261a0",
+        "writer": "333d51ee6e06495d", "repair": "5344c54c53418608"}
+
+
+def test_controller_gets_goals_and_the_planner_chooses_methods():
+    texts = prompts.prompts().rendered()
+    assert "Training objective" in texts["planning"] and "Training objective" not in texts["control"]
+    assert "gradient boosting" in texts["planning"] and "gradient boosting" not in texts["control"]
+    assert "Never name estimators" in texts["control"]
+    assert "one option, not an instruction" in texts["planning"]
+    assert "lowest AUC" in texts["control"] and "lowest AUC" in texts["writer"]
+
+
 def test_unknown_prompt_set_is_rejected():
     with pytest.raises(ValueError, match="registered"):
         prompts.prompts("nope")

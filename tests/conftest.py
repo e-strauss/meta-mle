@@ -4,6 +4,16 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/nano-mle-test-mpl")
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 
+# Under pytest-xdist (-n N), give each test process its own slice of the CPUs: the
+# harness pins attempt workers to the first CPUs of the runner's affinity, so
+# without slices every parallel test would share the same two cores.
+if os.environ.get("PYTEST_XDIST_WORKER"):
+    _cpus = sorted(os.sched_getaffinity(0))
+    _count = int(os.environ["PYTEST_XDIST_WORKER_COUNT"])
+    _size = max(2, len(_cpus) // _count)
+    _start = int(os.environ["PYTEST_XDIST_WORKER"].removeprefix("gw")) * _size % len(_cpus)
+    os.sched_setaffinity(0, (_cpus + _cpus)[_start:_start + _size])
+
 
 def pytest_runtest_setup(item):
     # No test is allowed to construct a live language-model backend.

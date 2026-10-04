@@ -18,7 +18,7 @@ boundary checkable.
 
 ```bash
 uv sync
-uv run pytest      # offline test suite
+uv run pytest -n 8 # offline test suite, 8 processes (each gets its own CPU slice)
 ```
 
 ## Running a task
@@ -156,8 +156,9 @@ for runs meant to be closer to AIDE.
 The instructions of the controller, planner, writer and repairer come from a prompt
 set, chosen like the other components at `init --prompts NAME` (default: `default`)
 with parameters from `[prompts.NAME]`. A set is a class of named fragments (`goal`,
-the `conventions` dict of rules, `control_rules`, `planning_rules`, `writer_rules`,
-`guide_notes`), and its methods assemble each role's instructions from them, so a
+the `conventions` dict of rules, `control_texts` with shorter controller versions of
+some of them, `control_rules`, `planning_rules`, `writer_rules`, `guide_notes`), and
+its methods assemble each role's instructions from them, so a
 changed rule reaches every role that uses it. A variant subclasses a set, overrides
 what it changes and is registered in `prompts.PROMPTS`:
 
@@ -173,6 +174,13 @@ The plan contract (`plans.GUIDE`) is enforced by the harness and stays the same 
 every set; a set may add `guide_notes` after it. The workspace records the set's name
 and parameters, and at every run start the rendered texts (`prompt_texts`) and their
 hashes (in the `run_started` event), since the code of a set may change between runs.
+
+Registered sets:
+
+| Set | Instructions |
+|---|---|
+| `default` | The current conventions. |
+| `oct04` | The default set as of 2026-10-04, frozen for ablations: population filters compared only when the check shows a difference, no threshold; no training-objective convention; the controller sees the full model conventions and may name methods, which the planner follows; a plateau may end the run. |
 
 ### CPU setup and parallel runs
 
@@ -246,17 +254,24 @@ Before the evaluation lock, the controller, planner and writer are asked for a
 population check: labelled rows may be selected differently from the rows to be
 predicted, also on label-related properties the prediction rows do not show. They
 compare candidate populations with the prediction rows on label-free observables,
-including an adversarial classifier (ROC AUC near 0.5 means indistinguishable), and
-lock the population the prediction rows cannot be told apart from. The locked rows
+including an adversarial classifier (ROC AUC near 0.5 means indistinguishable; above
+about 0.55 counts as a difference). They always compare populations given by
+plausible selection rules, including filters on label-derived quantities, lock the
+one with the lowest AUC and report every compared AUC in the setup. The locked rows
 are also the training rows, so the population is sized for the most data-hungry
-model, not to the number of prediction rows.
+model, from a quick learning curve before the lock, not to the number of prediction
+rows.
 
 Model choice follows conventions shared by the controller and planner: compare model
 families before tuning one, with at least one that learns its parameters from the
 data (on the GPU when `context.hardware` lists one); prefer learned over hand-set
-weights; after two expansions within the fold noise, switch family instead of
-sweeping again. The controller states what an expansion should achieve and leaves
-the method to the planner.
+weights; train on a loss aligned with the metric (e.g. a loss over the whole label
+set for a top-k metric); after two expansions within the fold noise, switch family,
+objective or signal instead of sweeping again, and do not stop on a plateau while
+an expansion still fits in the time left. The controller states the goal of an
+expansion and its evidence and never names a method; it sees shorter versions of
+the model conventions without methods. The planner chooses the method and treats
+one named in the direction as an option.
 
 A single loop dispatches one controller decision at a time:
 

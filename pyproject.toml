@@ -39,6 +39,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-xdist>=3.8.0",
 ]
 
 # The default PyPI torch wheel targets CUDA 13, which this machine's driver rejects
