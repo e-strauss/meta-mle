@@ -207,6 +207,13 @@ scored and never become candidates.
 
 ## How a run works
 
+Before the evaluation lock, the controller, planner and writer are asked for a
+population check: labelled rows may be selected differently from the rows to be
+predicted, also on label-related properties the prediction rows do not show. They
+compare candidate populations with the prediction rows on label-free observables,
+including an adversarial classifier (ROC AUC near 0.5 means indistinguishable), and
+lock the population the prediction rows cannot be told apart from.
+
 A single loop dispatches one controller decision at a time:
 
 | Action | What happens | Scored? |

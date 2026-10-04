@@ -12,12 +12,25 @@ predict. Cross-validation under the locked evaluation is how progress is measure
 it is only as good as the evaluation setup is representative.
 """
 
+# Part of CONVENTIONS and of the controller's instructions, which decide the lock.
+POPULATION_CHECK = """- Population check. The labelled rows may be selected differently from the rows to
+  be predicted, including on properties tied to the labels that the prediction rows
+  do not show (e.g. only entities with enough activity, history or positive labels).
+  Matching size or a few marginals does not show the populations agree. Before the
+  evaluation setup, compare candidate populations with the prediction rows on
+  label-free observables, including an adversarial check: a classifier that tries
+  to tell candidate rows from prediction rows, where ROC AUC near 0.5 means they are
+  indistinguishable. When they differ, compare populations defined by plausible
+  selection rules, including filters on label-derived quantities, and lock the one
+  the prediction rows cannot be told apart from.
+"""
+
 CONVENTIONS = """
 Working conventions:
 - Evaluation. Choose the population, labels, CV and scorer once, so scores stay
   comparable. Make the rows and folds mirror the prediction setting (entities,
   time, groups). Use the task's own metric when you can express it as a scorer.
-- Leakage 1, mark early. Mark X and the raw y as soon as rows and labels exist and
+""" + POPULATION_CHECK + """- Leakage 1, mark early. Mark X and the raw y as soon as rows and labels exist and
   build features after the marks, so anything fit on the target sees training folds
   only.
 - Leakage 2, where labels come from. Marking protects only the route through y. A
@@ -65,8 +78,8 @@ that every later pipeline is scored with. Use exploration evidence for it.
 A repair fixes the planned experiment; a different hypothesis needs a new proposal.
 """
 
-CONTROL_INSTRUCTIONS = GOAL + ("Working convention:\n" + DATA_VOLUME_STUDY
-                               if load_config()["prompts"]["data_volume_study"] else "") + """
+CONTROL_INSTRUCTIONS = GOAL + "Working conventions:\n" + POPULATION_CHECK + (
+    DATA_VOLUME_STUDY if load_config()["prompts"]["data_volume_study"] else "") + """
 Choose the next action. Score differences smaller than the fold-score spread are
 ties, not trends: do not extrapolate a direction from them. Explore with a concrete
 question and an observable stopping condition whenever evidence is missing: before

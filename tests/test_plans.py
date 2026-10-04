@@ -204,6 +204,10 @@ def test_data_volume_study_prompt_follows_config(tmp_path, monkeypatch):
         importlib.reload(prompts)
         assert ("Data volume study" in prompts.PLAN_INSTRUCTIONS) == enabled
         assert ("Data volume study" in prompts.CONTROL_INSTRUCTIONS) == enabled
+        # The population check is not optional: every role that shapes the lock sees it.
+        for instructions in (prompts.PLAN_INSTRUCTIONS, prompts.PLANNING_INSTRUCTIONS,
+                             prompts.CONTROL_INSTRUCTIONS):
+            assert "Population check" in instructions
     monkeypatch.undo()
     config.load_config.cache_clear()
     importlib.reload(prompts)
