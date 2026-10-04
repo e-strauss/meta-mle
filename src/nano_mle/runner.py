@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from .agents import ModelUnavailable
-from .config import load_config
+from .config import hardware, load_config
 from .controllers import controller
 from .contracts import create_contract, digest, source_manifest, verify_contract
 from .execution import run_plan
@@ -176,7 +176,8 @@ class Runner:
                    "locked_evaluation_source": contract["setup_source"] if contract else None,
                    "counts": self.counts(), "budget": self.budget.model_dump(),
                    "remaining_evaluations": self.budget.max_evaluations - self.counts()["evaluations"],
-                   "requested_explorations": requested, "parent": None, "time": self.time_context()}
+                   "requested_explorations": requested, "parent": None, "time": self.time_context(),
+                   "hardware": hardware()}
         context.update(self.memory.view(role, Journal(self.store), query,
                                         selection.parent_id if selection else None))
         if selection:

@@ -11,6 +11,9 @@ from pathlib import Path
 
 DEFAULTS = {
     "execution": {"cpu_threads": 32, "grid_n_jobs": 1},
+    # What the agents are told about the machine. Stated, never probed: with runs in
+    # parallel the node holds more than one run may use. 0 or [] means not stated.
+    "hardware": {"memory_gb": 0, "gpus": []},
     "plans": {"restrict_primitives": False},
     "prompts": {"data_volume_study": True},
     # Parameters per memory, e.g. [memory.window] leaderboard = 8; empty means the
@@ -56,3 +59,18 @@ def cpu_threads() -> int:
 
 def grid_n_jobs() -> int:
     return max(1, int(load_config()["execution"]["grid_n_jobs"]))
+
+
+def hardware() -> dict:
+    """The hardware block of the model context, from the configuration only."""
+    config = load_config()
+    threads = int(config["execution"]["cpu_threads"])
+    stated = {"cpu_threads": threads or "not stated",
+              "threads_per_pipeline_fit": max(1, threads // grid_n_jobs()) if threads else "not stated",
+              "memory_gb": config["hardware"]["memory_gb"] or "not stated",
+              "gpus": list(config["hardware"]["gpus"])}
+    stated["note"] = ("Workers are pinned to these CPU threads. "
+                      + ("A GPU is idle unless an estimator moves work to it (e.g. torch device 'cuda', "
+                         "XGBoost device='cuda')." if stated["gpus"] else "No GPU is stated; plan for the CPU."))
+    return stated
+

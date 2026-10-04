@@ -266,3 +266,95 @@ def build():
         validate_source(cls.replace("return self\n", "return X.skb.subsample(n=10)\n", 1))
     with pytest.raises(ValueError, match="Unsupported operation in class"):
         validate_source(cls.replace("self.subsample = subsample", "self.__dict__['subsample'] = subsample"))
+
+
+def test_eager_reads_from_any_library_are_rejected():
+    for eager in ("import pyarrow as pa\ndef build():\n    return pa.parquet.ParquetFile('t')\n",
+                  "import pyarrow.parquet as pq\ndef build():\n    return pq.read_table('t')\n",
+                  "import polars as pl\ndef build():\n    return pl.scan_parquet('t')\n",
+                  "import numpy as np\ndef build():\n    return np.loadtxt('t')\n"):
+        with pytest.raises(ValueError, match="never eager reads|record reads"):
+            validate_source(eager)
+
+
+def test_plans_keep_no_state_between_fits():
+    head = "import numpy as np\nfrom sklearn.base import BaseEstimator\n_CACHE = {}\n"
+    cached = head + ("class E(BaseEstimator):\n    def fit(self, X, y):\n"
+                     "        _CACHE['graph'] = np.zeros(3)\n        return self\n"
+                     "def build():\n    return {}\n")
+    updated = head + "def helper():\n    _CACHE.update(a=1)\ndef build():\n    return {}\n"
+    globalled = head + "def build():\n    global _CACHE\n    return {}\n"
+    class_dict = ("from sklearn.base import BaseEstimator\nclass E(BaseEstimator):\n    store = {}\n"
+                  "    def fit(self, X, y):\n        return self\ndef build():\n    return {}\n")
+    for source in (cached, updated, globalled, class_dict):
+        with pytest.raises(ValueError, match="no state between fits"):
+            validate_source(source)
+    # Module constants and locals that shadow them are fine.
+    validate_source("FIT = {'rows': 'train.csv'}\nPREDICT = {'rows': 'test.csv'}\n"
+                    "def build():\n    FIT = {}\n    FIT['x'] = 1\n    return {}\n")
+
+
+def test_torch_estimators_may_log_and_set_flags():
+    validate_source('''
+import numpy as np
+import torch
+from torch import nn
+from sklearn.base import BaseEstimator, ClassifierMixin
+
+
+class Net(nn.Module):
+    def __init__(self, width):
+        super().__init__()
+        self.layers = nn.Sequential(nn.Linear(4, width), nn.ReLU(), nn.Linear(width, 3))
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+class MLP(ClassifierMixin, BaseEstimator):
+    def __init__(self, width=8):
+        self.width = width
+
+    def fit(self, X, y):
+        torch.backends.cudnn.benchmark = True
+        self.net_ = Net(self.width)
+        for p in self.net_.parameters():
+            p.requires_grad = True
+        print("epoch 0 loss", 0.0)
+        self.net_.eval()
+        return self
+
+def build():
+    return {}
+''')
+    with pytest.raises(ValueError, match="Unsupported name: print"):
+        validate_source("def build():\n    print('x')\n    return {}\n")
+
+
+def test_hardware_comes_from_the_config_only(tmp_path, monkeypatch):
+    from nano_mle import config
+
+    path = tmp_path / "hw.toml"
+    path.write_text('[execution]\ncpu_threads = 16\ngrid_n_jobs = 2\n'
+                    '[hardware]\nmemory_gb = 512\ngpus = ["NVIDIA A100-SXM4-80GB, 80 GB"]\n')
+    monkeypatch.setenv("NANO_MLE_CONFIG", str(path))
+    config.load_config.cache_clear()
+    stated = config.hardware()
+    assert stated["cpu_threads"] == 16 and stated["threads_per_pipeline_fit"] == 8
+    assert stated["memory_gb"] == 512 and stated["gpus"] == ["NVIDIA A100-SXM4-80GB, 80 GB"]
+    assert "GPU is idle" in stated["note"]
+    # Unset values are reported as not stated, never probed from the machine.
+    path.write_text('[execution]\ncpu_threads = 0\n')
+    config.load_config.cache_clear()
+    stated = config.hardware()
+    assert stated["cpu_threads"] == stated["memory_gb"] == "not stated" and stated["gpus"] == []
+    monkeypatch.undo()
+    config.load_config.cache_clear()
+
+
+def test_model_choice_conventions_reach_controller_and_planner():
+    from nano_mle import prompts
+
+    for instructions in (prompts.PLAN_INSTRUCTIONS, prompts.PLANNING_INSTRUCTIONS, prompts.CONTROL_INSTRUCTIONS):
+        assert "Model families" in instructions and "context.hardware" in instructions
+        assert "Training pool" in instructions

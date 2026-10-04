@@ -83,6 +83,7 @@ the configuration it used in its workspace metadata.
 | Setting | Default | Effect |
 |---|---|---|
 | `[execution] cpu_threads` | 32 | Logical CPUs the workers may use; 0 means all. Workers are pinned to the first `cpu_threads` CPUs the runner may use, a hard cap even when a plan sets `n_jobs=-1`. OpenMP/BLAS thread counts are set to match. See [CPU setup](#cpu-setup-and-parallel-runs). |
+| `[hardware] memory_gb`, `gpus` | 0, [] | What the agents are told about the machine (`context.hardware`, with `cpu_threads`): stated in the config, never probed, since with parallel runs the node holds more than one run may use. Keep `gpus` in line with what the run can see (`CUDA_VISIBLE_DEVICES`). 0 or [] means not stated. |
 | `[execution] grid_n_jobs` | 1 | Fits run in parallel processes by the grid search; each gets `cpu_threads // grid_n_jobs` threads and its own copy of X and y, so values above 1 only pay off for small data. Probes fit sequentially with all threads. |
 | `[plans] restrict_primitives` | false | Limit `apply_func` to the curated primitives in `graphs.PRIMITIVES`. Disabled for now, so plans may call any library function; plan-defined functions and lambdas are rejected either way. |
 | `[memory.<name>] …` | memory defaults | Parameters of a memory, read at `init` (e.g. `[memory.window] leaderboard = 8`, `[memory.full] max_chars = 400000`). |
@@ -93,7 +94,10 @@ the configuration it used in its workspace metadata.
 ### Agent configurations
 
 Controller, policy and memory are independent choices set at `init`. The default
-remains `--controller llm --policy greedy --memory window`. The LLM controller
+remains `--controller llm --policy greedy --memory window`. For a new task,
+`--policy draft-greedy` is recommended: greedy expands the first candidate's line for
+the whole run, so the first model family tends to stay, while draft-greedy drafts
+several pipelines from root first, which the conventions ask to differ in family. The LLM controller
 chooses every action, including probes and explorations after the evaluation lock.
 `--controller auto` uses the same LLM controller to prepare and lock evaluation,
 then expands automatically. It supplies the planner with a direction to draft a
@@ -212,7 +216,16 @@ population check: labelled rows may be selected differently from the rows to be
 predicted, also on label-related properties the prediction rows do not show. They
 compare candidate populations with the prediction rows on label-free observables,
 including an adversarial classifier (ROC AUC near 0.5 means indistinguishable), and
-lock the population the prediction rows cannot be told apart from.
+lock the population the prediction rows cannot be told apart from. The locked rows
+are also the training rows, so the population is sized for the most data-hungry
+model, not to the number of prediction rows.
+
+Model choice follows conventions shared by the controller and planner: compare model
+families before tuning one, with at least one that learns its parameters from the
+data (on the GPU when `context.hardware` lists one); prefer learned over hand-set
+weights; after two expansions within the fold noise, switch family instead of
+sweeping again. The controller states what an expansion should achieve and leaves
+the method to the planner.
 
 A single loop dispatches one controller decision at a time:
 
@@ -248,6 +261,7 @@ are stateless calls that see what the harness passes them:
 | Intermediate artifacts | reads its own files (convention: no cached features) | never: plans read task sources only, artifact paths are hidden |
 | History and reasoning | its own context window | what the [memory](#memory) shows: by default findings, leaderboard, recent explorations and failures, trajectory |
 | Run time | sees wall time | attempt wall time, phase timings and per-variant fit times in the records it is shown |
+| Hardware | can inspect the machine | `context.hardware` from `[hardware]` and `cpu_threads` in the config; never probed |
 
 Every implementation runs in a time-bounded subprocess. If it fails, the repairer
 gets the source and traceback and may fix it, up to `--max-repairs` times. A
@@ -390,10 +404,14 @@ check (`graphs.py`):
   predictions, manifests) are rejected, so anything worth reusing is recomputed. The
   model context lists task sources but no artifact paths.
 - Computation is expressed as fine-grained DataOps. No UDFs, `deferred`, callable
-  `apply`/`map`, eager reads, materialised data, files, or manual fitting in the graph.
+  `apply`/`map`, eager reads (pandas, polars, pyarrow or numpy file readers),
+  materialised data, files, or manual fitting in the graph.
+- Plans keep no state between fits: no module-level caches, `global`, or mutable class
+  attributes. Module constants such as paths and the `FIT`/`PREDICT` dicts are fine.
 - Custom classes are allowed when they are estimators or transformers (`fit`), torch
   modules (`forward`) or CV splitters, applied with `.skb.apply`. Inside them, fitting,
-  private state and `super().__init__()` are allowed. The guide asks for them only
+  private state, `super().__init__()`, setting attributes of other objects (torch flags
+  such as `p.requires_grad`) and `print` are allowed. The guide asks for them only
   when a step needs fitted state or is a new model. A plan-defined class inside the
   locked X/y graph is fingerprinted by its source.
 - Any installed library may be imported, including lightgbm, xgboost, catboost, torch

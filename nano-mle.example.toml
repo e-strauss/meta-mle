@@ -12,6 +12,14 @@ cpu_threads = 32
 # fit folds sequentially with all threads.
 grid_n_jobs = 1
 
+[hardware]
+# What the controller, planner and writer are told about the machine this run may
+# use (context.hardware, together with [execution] cpu_threads). Stated here, never
+# probed: with runs in parallel the node holds more than one run may use. Make the
+# GPU list match what the run can see (CUDA_VISIBLE_DEVICES). 0 or [] means not stated.
+memory_gb = 0
+gpus = []            # e.g. ["NVIDIA A100-SXM4-80GB, 80 GB"]
+
 [plans]
 # Restrict apply_func / call nodes to the curated list of library primitives in
 # graphs.PRIMITIVES. Disabled for now so the agent may call any library function;

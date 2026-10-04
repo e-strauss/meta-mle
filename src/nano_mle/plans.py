@@ -84,10 +84,18 @@ Skrub and library notes (exact signatures; do not guess other keywords):
   ML libraries include scikit-learn, lightgbm, xgboost, catboost, torch (CUDA),
   skorch, sentence-transformers, polars, faiss and rank_bm25. Modules for processes,
   files or network access (os, subprocess, pathlib, requests, ...) are not allowed.
+- A torch model is a custom estimator: fit seeds torch, builds an nn.Module (a class
+  with forward), moves it and each batch to the device ('cuda' when
+  torch.cuda.is_available(), else 'cpu') and trains over a DataLoader of tensors;
+  predict_proba runs under torch.no_grad() in batches and returns a numpy array of
+  shape (n_rows, n_classes), one column per label for multi-label targets. Keep the
+  fitted network on self (e.g. self.net_), and print training losses if useful.
 - Custom classes are estimators/transformers (fit), torch modules (forward) or CV
   splitters (split(self, X, y=None, groups=None) and get_n_splits(self, X=None,
   y=None, groups=None)). Estimators subclass BaseEstimator and keep __init__ to
   storing parameters; classifier wrappers list ClassifierMixin before BaseEstimator.
+  Plans keep no state between fits: no module-level caches, globals or mutable class
+  attributes, and no file reads outside the recorded readers.
 - Boolean masks over nullable columns must not contain NA: use .fillna(False) or
   str methods with na=False before combining masks with & or |.
 - Output names are dict keys that must be valid Python identifiers.
@@ -124,6 +132,21 @@ def installed(module):
         return False
 
 
+EAGER_READERS = {"ParquetFile", "ParquetDataset", "open_dataset", "iter_batches", "loadtxt", "genfromtxt",
+                 "fromfile", "memmap"}
+# File-reading submodules: their readers bypass the recorded graph.
+DENIED_SUBMODULES = {"pyarrow.parquet", "pyarrow.dataset", "pyarrow.csv", "pyarrow.feather", "pyarrow.json",
+                     "pyarrow.orc"}
+
+
+def is_reader_name(name):
+    return name.startswith(("read_", "scan_")) or name in EAGER_READERS
+
+
+MUTATORS = {"update", "append", "extend", "setdefault", "add", "insert", "pop", "popitem", "clear",
+            "remove", "discard"}
+
+
 # Inside custom estimator classes, fitting and torch's model.eval() are allowed.
 CLASS_ALLOWED = {"fit", "fit_transform", "eval"}
 FORBIDDEN = {"deferred", "eval", "exec", "preview", "get_data", "set_data", "get_vars",
@@ -142,25 +165,19 @@ def validate_source(source):
     if (build.args.args or build.args.posonlyargs or build.args.kwonlyargs or build.args.vararg
             or build.args.kwarg or build.decorator_list):
         raise ValueError("Use undecorated build() without arguments")
-    # Eager reads are calls that resolve to pandas readers: pd.read_*(...) through a
-    # pandas alias, or names imported from pandas. A plan's own helper that happens
-    # to be called read_parquet (and records the read) is not one.
-    reader_names = {"read_csv", "read_parquet"}
-    pandas_aliases = {"pandas"}
-    imported_readers = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            pandas_aliases.update(a.asname or a.name for a in node.names if a.name == "pandas")
-        if isinstance(node, ast.ImportFrom) and node.module == "pandas":
-            imported_readers.update(a.asname or a.name for a in node.names if a.name in reader_names)
+    # Eager reads are calls of file readers from any library: pandas/polars read_* and
+    # scan_*, pyarrow's read_table and ParquetFile, numpy's loadtxt and fromfile. A
+    # plan's own helper that happens to be called read_parquet (and records the read)
+    # is not one; passing a reader to apply_func is not a call.
     local_functions = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
-    readers = imported_readers | (reader_names - local_functions)
+    imported_readers = {a.asname or a.name for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
+                        for a in n.names if is_reader_name(a.name)}
 
     def is_eager_read(call):
         if isinstance(call.func, ast.Attribute):
-            return (call.func.attr in reader_names and isinstance(call.func.value, ast.Name)
-                    and call.func.value.id in pandas_aliases)
-        return getattr(call.func, "id", "") in readers
+            return is_reader_name(call.func.attr)
+        name = getattr(call.func, "id", "")
+        return name in imported_readers or (name not in local_functions and is_reader_name(name))
     choice_names = set()
     imported = set()
     for node in ast.walk(tree):
@@ -173,6 +190,10 @@ def validate_source(source):
                 raise ValueError(f"Wildcard import from {node.module} is not supported")
             imported.add(node.module)
     denied = sorted(m for m in imported if m.split(".")[0] in DENIED_MODULES)
+    readers = sorted(m for m in imported if m in DENIED_SUBMODULES)
+    if readers:
+        raise ValueError(f"Import of {', '.join(readers)} is not allowed: record reads with "
+                         "skrub.as_data_op(path).skb.apply_func(pd.read_parquet | pd.read_csv, ...)")
     if denied:
         raise ValueError(f"Import of {', '.join(denied)} is not allowed: plans may not access processes, "
                          "files, the network or interpreter internals")
@@ -187,6 +208,7 @@ def validate_source(source):
                        and not n.args[1].value.startswith("_") and n.args[1].value not in FORBIDDEN}
     in_class = {id(n) for c in ast.walk(tree) if isinstance(c, ast.ClassDef)
                 for m in c.body for n in ast.walk(m)}
+    check_no_shared_state(tree)
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             if any(a.name == "FunctionTransformer" for a in node.names):
@@ -215,7 +237,8 @@ def validate_source(source):
             elif node.attr.startswith("_") or node.attr in FORBIDDEN:
                 raise ValueError(f"Unsupported opaque or harness-owned operation: {node.attr}")
         if isinstance(node, ast.Name) and id(node) not in literal_getattr and (node.id.startswith("__") or node.id in
-                {"open", "eval", "exec", "compile", "getattr", "setattr", "globals", "locals", "vars", "print", "FunctionTransformer"}):
+                {"open", "eval", "exec", "compile", "getattr", "setattr", "globals", "locals", "vars", "FunctionTransformer"}
+                or (node.id == "print" and id(node) not in in_class)):
             raise ValueError(f"Unsupported name: {node.id}")
         if isinstance(node, ast.Call):
             name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
@@ -238,10 +261,49 @@ def validate_source(source):
         if isinstance(node, ast.Assign):
             # Dictionary construction is allowed in graph-building helpers.
             # DataOp item mutation fails at construction; use recorded assign().
+            # Inside classes, attributes of other objects may be set (torch flags such as
+            # p.requires_grad = False); there are no DataOps there.
             for target in node.targets:
-                if isinstance(target, ast.Attribute) and not (isinstance(target.value, ast.Name) and target.value.id == "self"):
-                    raise ValueError("Use recorded assign(), not dataframe mutation")
+                if (isinstance(target, ast.Attribute) and id(target) not in in_class
+                        and not (isinstance(target.value, ast.Name) and target.value.id == "self")):
+                    raise ValueError("Set DataFrame columns with recorded .assign(col=...), not attribute "
+                                     "assignment (df.col = ...)")
     return tree
+
+
+def check_no_shared_state(tree):
+    """Plans keep no state between fits and folds: no global/nonlocal, no mutation of
+    module-level names from functions or classes, no mutable class attributes. Module
+    constants (paths, FIT/PREDICT dicts) stay allowed."""
+    module_names = {t.id for n in tree.body if isinstance(n, (ast.Assign, ast.AnnAssign))
+                    for t in (n.targets if isinstance(n, ast.Assign) else [n.target]) if isinstance(t, ast.Name)}
+    message = ("Plans keep no state between fits: no module-level caches or global variables; "
+               "keep fitted state on self and recompute inputs in the graph")
+    for function in ast.walk(tree):
+        if isinstance(function, ast.ClassDef):
+            for item in function.body:
+                if isinstance(item, (ast.Assign, ast.AnnAssign)) and isinstance(
+                        item.value, (ast.Dict, ast.List, ast.Set, ast.DictComp, ast.ListComp, ast.SetComp)):
+                    raise ValueError(f"Class {function.name}: no mutable class attributes; {message}")
+        if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        local = {t.id for n in ast.walk(function) if isinstance(n, (ast.Assign, ast.AnnAssign, ast.For))
+                 for t in ([n.target] if not isinstance(n, ast.Assign) else n.targets) if isinstance(t, ast.Name)}
+        local |= {a.arg for a in ast.walk(function) if isinstance(a, ast.arg)}
+        shared = module_names - local
+        for node in ast.walk(function):
+            if isinstance(node, (ast.Global, ast.Nonlocal)):
+                raise ValueError(message)
+            targets = (node.targets if isinstance(node, ast.Assign) else
+                       [node.target] if isinstance(node, (ast.AugAssign, ast.AnnAssign)) else
+                       node.targets if isinstance(node, ast.Delete) else [])
+            for target in targets:
+                if (isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name)
+                        and target.value.id in shared):
+                    raise ValueError(message)
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in MUTATORS
+                    and isinstance(node.func.value, ast.Name) and node.func.value.id in shared):
+                raise ValueError(message)
 
 
 def evaluation_source(source):

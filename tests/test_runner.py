@@ -459,3 +459,10 @@ def test_an_unanswered_repair_keeps_the_failed_attempt_as_a_failed_candidate(tmp
     assert [c["status"] for c in store.records("candidate")] == ["failed", "failed"]
     assert backend.seen.count(("repair", "pipeline", False)) == 4
     assert store.db.execute("SELECT 1 FROM events WHERE kind=?", ("repair_unavailable",)).fetchone()
+
+
+def test_every_role_sees_the_configured_hardware(workspace):
+    runner = Runner(workspace, ScriptedBackend())
+    context = runner.context("control")
+    runner.store.close()
+    assert {"cpu_threads", "memory_gb", "gpus", "note"} <= set(context["hardware"])
