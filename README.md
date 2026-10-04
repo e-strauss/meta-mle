@@ -59,7 +59,8 @@ uv run pytest      # offline test suite
    `--model` is any DSPy/LiteLLM model id. `run` also takes `--max-tokens`
    (completion cap per call including reasoning, default 64,000; with high reasoning
    a lower cap cuts plans off mid-file, which then costs a repair) and
-   `--request-timeout` (seconds, default 180). Provider retries are disabled. The run
+   `--request-timeout` (seconds, default 600; with high reasoning a long plan or repair
+   can take over 3 minutes before the first byte). Provider retries are disabled. The run
    ends with a [submission](#submission) of the best candidate unless `--no-submit`
    is given; put the prediction rows and the sample submission in the task's sources.
 

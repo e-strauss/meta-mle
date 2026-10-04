@@ -68,7 +68,7 @@ def main():
     run.add_argument("workspace", type=Path)
     run.add_argument("--model", required=True, help="DSPy/LiteLLM model ID, e.g. gemini/gemini-3.8-flash")
     run.add_argument("--max-tokens", type=int, default=64000, help="Completion-token cap per call, incl. reasoning")
-    run.add_argument("--request-timeout", type=int, default=180, help="Seconds per model request")
+    run.add_argument("--request-timeout", type=int, default=600, help="Seconds per model request")
     run.add_argument("--reasoning-effort", choices=["low", "medium", "high"],
                      help="Provider reasoning effort (default: low for GPT-6, provider default otherwise)")
     run.add_argument("--no-submit", action="store_true",
@@ -82,7 +82,7 @@ def main():
     final.add_argument("--max-repairs", type=int, default=2)
     final.add_argument("--timeout", type=int, default=7200, help="Seconds for fitting and predicting")
     final.add_argument("--max-tokens", type=int, default=64000)
-    final.add_argument("--request-timeout", type=int, default=180)
+    final.add_argument("--request-timeout", type=int, default=600)
     final.add_argument("--reasoning-effort", choices=["low", "medium", "high"],
                      help="Provider reasoning effort (default: low for GPT-6, provider default otherwise)")
     draw = sub.add_parser("draw", help="Print an attempt's Skrub DataOps graph as SVG (lazy; reads no data)")

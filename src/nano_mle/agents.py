@@ -7,7 +7,7 @@ from typing import Protocol
 from .models import Decision, Finding, Proposal
 
 
-def lm_settings(model: str, max_tokens: int, timeout: int = 180, reasoning_effort: str | None = None) -> dict:
+def lm_settings(model: str, max_tokens: int, timeout: int = 600, reasoning_effort: str | None = None) -> dict:
     settings = {"max_tokens": max_tokens, "temperature": 0.2, "num_retries": 0,
                 "timeout": timeout, "cache": False}
     if model.removeprefix("openai/").startswith("gpt-6"):
@@ -58,7 +58,7 @@ class Backend(Protocol):
 
 
 class DSPyBackend:
-    def __init__(self, model: str, max_tokens=64000, timeout=180, reasoning_effort=None):
+    def __init__(self, model: str, max_tokens=64000, timeout=600, reasoning_effort=None):
         import os
         import dspy
         from dotenv import load_dotenv
