@@ -89,7 +89,7 @@ the configuration it used in its workspace metadata.
 | `[memory.<name>] …` | memory defaults | Parameters of a memory, read at `init` (e.g. `[memory.window] leaderboard = 8`, `[memory.full] max_chars = 400000`). |
 | `[policy.<name>] …` | policy defaults | Parameters saved at `init`: draft count, UCT exploration coefficient or MCGS seed. |
 | `[controller.auto] time_margin` | 1.0 | Auto stops when the remaining time is less than this factor times the longest of the last 3 expansions' worker time (repairs included). 0 disables the estimate. |
-| `[prompts.<name>] …` | prompt-set defaults | Parameters of a [prompt set](#prompt-sets), read at `init`. The default set's `data_volume_study` (true) adds the data-volume-study convention for the planner and controller: for large sources, explore which rows and table parts are needed before the lock, and measure a learning curve over training-set size after it. The older `[prompts] data_volume_study` key still works. |
+| `[prompts.<name>] …` | prompt-set defaults | Parameters of a [prompt set](#prompt-sets), read at `init`. The default set's `data_volume_study` (true) adds the data-volume-study convention for the planner and controller: for large sources, explore which rows and table parts are needed before the lock, and measure a learning curve over training-set size after it, unless the pool was already sized from a learned-model curve. The older `[prompts] data_volume_study` key still works. |
 
 ### Agent configurations
 

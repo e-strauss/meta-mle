@@ -88,9 +88,13 @@ it is only as good as the evaluation setup is representative.
         "leakage_label_sources": """- Leakage 2, where labels come from. Marking protects only the route through y. A
   feature that depends on labels must take them from the marked y or from rows
   provably disjoint from the modelled rows; reading the modelled rows' labels back
-  from a source table leaks identically in every fold. Prefer statistics estimated
-  on disjoint rows over leave-one-out corrections. In graph or neighbour features,
-  a walk that leaves a row and returns (d -> n -> d) hands it its own label.
+  from a source table leaks identically in every fold. Labelled rows outside the
+  locked population are such disjoint rows: they are a legitimate and often the
+  strongest source of label-derived features (e.g. neighbour or group statistics),
+  and restricting these features to the marked y discards them. Prefer statistics
+  estimated on disjoint rows over leave-one-out corrections. In graph or neighbour
+  features, a walk that leaves a row and returns (d -> n -> d) hands it its own
+  label.
 """,
         "leakage_detection": """- Leakage 3, how to catch it. Distrust a large gain with an unusually small fold
   std, and a feature whose standalone ranking is near-perfect on the rows it covers.
@@ -115,7 +119,8 @@ it is only as good as the evaluation setup is representative.
   Before the evaluation setup, explore which rows and which parts of large tables
   the task needs (e.g. only edges or events that touch the modelled and predicted
   entities) and whether a deterministic sample matches the prediction population.
-  After the lock, measure a learning curve: keep the test folds fixed and train on
+  After the lock, measure a learning curve only when the pool was not sized from a
+  learned-model curve before the lock: keep the test folds fixed and train on
   growing deterministic fractions of the training rows, e.g. a choose_from over the
   fraction with an estimator that subsamples in fit. Use a model that learns its
   parameters from the rows; one that only estimates priors gives a flat curve
@@ -141,8 +146,8 @@ it is only as good as the evaluation setup is representative.
         "data_volume_study": """- Data volume study. When sources are large (millions of rows), decide the modelled
   population and the parts of large tables the task needs with evidence before the
   lock. After the lock, ask for a learning curve over the training-set size with a
-  learned model; if it still rises at the locked size, record that a larger
-  population is likely to help.
+  learned model only when the pool was not sized from one before the lock; if it
+  still rises at the locked size, record that a larger population is likely to help.
 """,
     }
 
@@ -254,6 +259,27 @@ class Oct04(Prompts):
   swept in grids. When two expansions in a row move the score by less than the fold
   noise, the family has plateaued: propose a different family or a learned model over
   the signals found so far, not another sweep.
+""",
+                   "leakage_label_sources": """- Leakage 2, where labels come from. Marking protects only the route through y. A
+  feature that depends on labels must take them from the marked y or from rows
+  provably disjoint from the modelled rows; reading the modelled rows' labels back
+  from a source table leaks identically in every fold. Prefer statistics estimated
+  on disjoint rows over leave-one-out corrections. In graph or neighbour features,
+  a walk that leaves a row and returns (d -> n -> d) hands it its own label.
+""",
+                   "data_volume_study": """- Data volume study. When sources are large (millions of rows), decide the modelled
+  population with evidence rather than defaulting to all rows or to a small sample.
+  Before the evaluation setup, explore which rows and which parts of large tables
+  the task needs (e.g. only edges or events that touch the modelled and predicted
+  entities) and whether a deterministic sample matches the prediction population.
+  After the lock, measure a learning curve: keep the test folds fixed and train on
+  growing deterministic fractions of the training rows, e.g. a choose_from over the
+  fraction with an estimator that subsamples in fit. Use a model that learns its
+  parameters from the rows; one that only estimates priors gives a flat curve
+  whatever the data. Build the added rows exactly like the others, including their
+  label-derived features; a curve that falls as rows are added signals a
+  construction error, not saturation. The curve only reaches the locked population;
+  if it is still rising there, record that a larger population is likely to help.
 """,
                    }
     control_texts = {}
