@@ -90,9 +90,9 @@ it is only as good as the evaluation setup is representative.
   feature that depends on labels must take them from the marked y or from rows
   provably disjoint from the modelled rows; reading the modelled rows' labels back
   from a source table leaks identically in every fold. Labelled rows outside the
-  locked population are such disjoint rows: they are a legitimate and often the
-  strongest source of label-derived features, and restricting these features to the
-  marked y discards them. Prefer statistics
+  locked population are such disjoint rows: they are a legitimate and can be a strong
+  source of label-derived features, and restricting these features to the marked y
+  discards them. Prefer statistics
   estimated on disjoint rows over leave-one-out corrections. In graph or neighbour
   features, a walk that leaves a row and returns (d -> n -> d) hands it its own
   label.
