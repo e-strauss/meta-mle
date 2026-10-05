@@ -331,10 +331,11 @@ about 0.55 counts as a difference). They always compare populations given by
 plausible selection rules, including filters on label-derived quantities, lock the
 one with the lowest AUC and report every compared AUC in the setup. The locked rows
 are also the training rows, and every experiment fits all folds on them. A quick
-learning curve before the lock, with a learned model (not priors or heuristics) and
-fit times recorded, sizes the population: the largest size that still leaves time
-for a dozen or more experiments, larger only when the gain beats a typical
-modelling change, not the number of prediction rows.
+learning curve before the lock, with a learned model (not priors or heuristics),
+sizes the population: each size is timed as an experiment runs it (features and
+model on every fold), and the pool is the largest size that still leaves time for a
+dozen or more experiments, larger only when the gain beats a typical modelling
+change. That size is a limit extrapolated from the measured times, not a target.
 
 Model choice follows conventions shared by the controller and planner: compare model
 families before tuning one, with at least one that learns its parameters from the

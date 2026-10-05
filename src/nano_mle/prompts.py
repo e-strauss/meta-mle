@@ -50,11 +50,14 @@ it is only as good as the evaluation setup is representative.
   against slower experiments. Before the lock, measure a quick learning curve in an
   exploration: a model that learns from the rows, of the kind you expect to use (not
   priors, counts or a propagation heuristic, which saturate early whatever the
-  data), fitted on growing sizes, recording the score and fit time at each size and
-  stopping once one fit takes more than a few minutes. Choose the largest size at
-  which fitting all folds still leaves time for a dozen or more experiments in the
+  data), fitted on growing sizes, recording the score and time at each size. Time a
+  size as an experiment will run it: features built and the model fitted and scored
+  on every fold, not one bare model fit. Choose the largest size at which an
+  experiment timed this way still leaves time for a dozen or more experiments in the
   remaining run time; go larger only when the curve's gain exceeds what a modelling
-  change typically adds. The setup names the curve's model, the score and fit time
+  change typically adds. That size is a limit, not a target: extrapolate it from the
+  measured times instead of measuring sizes beyond it, and a smaller size is fine
+  when the curve has flattened. The setup names the curve's model, the score and time
   per size, and why the size was chosen. A large pool may keep its test folds a
   smaller fixed subset (explicit folds or a custom splitter), which favours more
   training rows over more folds; train and test rows must not overlap.
