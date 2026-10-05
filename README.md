@@ -250,77 +250,11 @@ re-implements or repairs. Repairs see the full traceback.
 
 ## How a run works
 
-```mermaid
-flowchart TB
-    CTRL[Controller]
-    OBS[Observations: findings, candidates, failures]
-    PR[Prompt set]
-    MEM[Memory view]
-    SUB[Submission]
+![nano-mle run flow](docs/diagrams/run-flow.svg)
 
-    subgraph EXPLORE[Exploration]
-        W1[Writer] --> X1[Harness runs graph] --> I1[Interpreter] --> F1[Findings]
-    end
-
-    LOCK[Evaluation lock: rows, labels, CV, scorer]
-
-    subgraph SEARCH[Expansion]
-        P2[Planner] --> W2[Writer] --> X2[Harness scores grid variants on locked folds]
-        X2 -- error --> R2[Repairer] --> X2
-    end
-
-    PROBE[Probe: fold scores and error summary]
-    ST[Search tree of candidates]
-    SP[Search policy]
-
-    subgraph POLICIES[Policies]
-        GR[greedy]
-        GD[draft-greedy]
-        MCTS[mcts]
-        MCGS[mcgs]
-    end
-
-    subgraph MEMORIES[Memories]
-        FULL[full]
-        WIN[window]
-        AIDE[aide]
-    end
-
-    OBS --> CTRL
-    CTRL -- explore --> W1
-    CTRL -- establish_evaluation --> LOCK
-    CTRL -- expand --> P2
-    CTRL -- probe --> PROBE
-    CTRL -- stop --> SUB
-    P2 -- requests exploration --> W1
-    F1 --> OBS
-    X2 --> ST --> OBS
-    PROBE --> OBS
-    LOCK --> X2
-    ST --> SP
-    SP -- next parent --> CTRL
-    SP -- parent, references --> P2
-    POLICIES -.- SP
-    OBS --> MEM
-    MEMORIES -.- MEM
-    MEM --> CTRL & EXPLORE & SEARCH
-    PR --> CTRL & SEARCH
-    PR -- writer --> EXPLORE
-
-    classDef red fill:#fb464c33,stroke:#fb464c
-    classDef orange fill:#e9973f33,stroke:#e9973f
-    classDef yellow fill:#e0de7133,stroke:#e0de71
-    classDef green fill:#44cf6e33,stroke:#44cf6e
-    classDef cyan fill:#53dfdd33,stroke:#53dfdd
-    classDef purple fill:#a882ff33,stroke:#a882ff
-
-    class CTRL red
-    class SP orange
-    class MEM yellow
-    class OBS green
-    class PR cyan
-    class ST purple
-```
+[PNG for terminal viewing](docs/diagrams/run-flow.png) ·
+[D2 source](docs/diagrams/run-flow.d2) ·
+[Regeneration instructions](docs/diagrams/README.md)
 
 Before the evaluation lock, the controller, planner and writer are asked for a
 population check: labelled rows may be selected differently from the rows to be
@@ -340,13 +274,18 @@ change. That size is a limit extrapolated from the measured times, not a target.
 Model choice follows conventions shared by the controller and planner: compare model
 families before tuning one, with at least one that learns its parameters from the
 data (on the GPU when `context.hardware` lists one); prefer learned over hand-set
-weights; train on a loss aligned with the metric (e.g. a loss over the whole label
-set for a top-k metric); after two expansions within the fold noise, switch family,
-objective or signal instead of sweeping again, and do not stop on a plateau while
-an expansion still fits in the time left. The controller states the goal of an
-expansion and its evidence and never names a method; it sees shorter versions of
-the model conventions without methods. The planner chooses the method and treats
-one named in the direction as an option.
+weights; train on a loss that rewards what the metric rewards; after two expansions
+within the fold noise, switch family, objective or signal instead of sweeping
+again, and do not stop on a plateau while an expansion still fits in the time
+left. The controller states the goal of an expansion and its evidence and never
+names a method; it sees shorter versions of the model conventions without
+methods. The planner chooses the method and treats one named in the direction as
+an option; once a candidate combines several feature blocks, it may ablate them
+one at a time.
+
+The conventions are task-independent: examples in them must not hint at a
+particular task's solution. Prompts are tuned on runs of specific tasks, so a
+change motivated by one run is phrased as the general principle.
 
 A single loop dispatches one controller decision at a time:
 

@@ -32,17 +32,15 @@ it is only as good as the evaluation setup is representative.
 """,
         "population_check": """- Population check. The labelled rows may be selected differently from the rows to
   be predicted, including on properties tied to the labels that the prediction rows
-  do not show (e.g. only entities with enough activity, history or positive labels).
-  Matching size or a few marginals does not show the populations agree. Before the
-  evaluation setup, compare candidate populations with the prediction rows on
-  label-free observables, including an adversarial check: a classifier that tries
-  to tell candidate rows from prediction rows, where ROC AUC near 0.5 means they are
-  indistinguishable. Read an AUC above about 0.55, or above its spread across folds,
-  as a difference, not as minimal shift. Always compare the populations given by
-  plausible selection rules, including filters on label-derived quantities (e.g. a
-  minimum count of positive labels or of activity), scored with the same classifier,
-  and lock the one with the lowest AUC. The evaluation setup reports the AUC of
-  every compared population.
+  do not show. Matching size or a few marginals does not show the populations agree.
+  Before the evaluation setup, compare candidate populations with the prediction
+  rows on label-free observables, including an adversarial check: a classifier that
+  tries to tell candidate rows from prediction rows, where ROC AUC near 0.5 means
+  they are indistinguishable. Read an AUC above about 0.55, or above its spread
+  across folds, as a difference, not as minimal shift. Always compare the
+  populations given by plausible selection rules, including filters on
+  label-derived quantities, scored with the same classifier, and lock the one with
+  the lowest AUC. The evaluation setup reports the AUC of every compared population.
 """,
         "training_pool": """- Training pool. The locked rows are the training rows as well as the test folds,
   and every later experiment fits all folds on them: size the population for the
@@ -71,12 +69,11 @@ it is only as good as the evaluation setup is representative.
   objective, a new signal source or an ensemble of families, not another sweep. A
   plateau is not a reason to stop.
 """,
-        "objective": """- Training objective. A model is only as good as the metric its loss rewards. For a
-  top-k or ranking metric over many labels, prefer a loss over the whole label set
-  (softmax or listwise over the normalised label vector) to independent per-label
-  binary losses; for a metric on probabilities, a proper scoring rule. When a learned
-  model's loss differs from the metric, an aligned loss is an experiment worth
-  running.
+        "objective": """- Training objective. A model is only as good as the metric its loss rewards. Work
+  out what the task's metric rewards (an ordering, calibrated probabilities, a
+  threshold, a scale) and prefer a loss that rewards the same thing over a generic
+  default. When a learned model's loss differs from the metric, an aligned loss is
+  an experiment worth running.
 """,
         "hardware": """- Hardware. context.hardware states the CPU threads, memory and GPUs this run may
   use; size models to it. A GPU does nothing unless an estimator moves work to it.
@@ -90,8 +87,8 @@ it is only as good as the evaluation setup is representative.
   provably disjoint from the modelled rows; reading the modelled rows' labels back
   from a source table leaks identically in every fold. Labelled rows outside the
   locked population are such disjoint rows: they are a legitimate and often the
-  strongest source of label-derived features (e.g. neighbour or group statistics),
-  and restricting these features to the marked y discards them. Prefer statistics
+  strongest source of label-derived features, and restricting these features to the
+  marked y discards them. Prefer statistics
   estimated on disjoint rows over leave-one-out corrections. In graph or neighbour
   features, a walk that leaves a row and returns (d -> n -> d) hands it its own
   label.
@@ -191,6 +188,9 @@ context.controller_direction is the controller's goal for expanding now. Choose 
 method yourself: a method named in the direction is one option, not an instruction.
 Size the experiment (grid variants, model capacity) so it fits in context.time's
 remaining run time, judging from the typical attempt durations.
+Once a candidate combines several feature blocks or components, an ablation that
+drops one at a time is a worthwhile experiment: it shows which parts carry the
+score and which only add cost.
 State the hypothesis and the changes, grounded in findings, references and history.
 """
 
