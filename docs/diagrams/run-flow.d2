@@ -1,0 +1,109 @@
+# Regenerate the SVG and PNG with: bash docs/diagrams/render.sh
+vars: {
+  d2-config: {
+    layout-engine: tala
+    theme-id: 0
+    pad: 32
+  }
+}
+
+direction: right
+style.fill: "#ffffff"
+
+classes: {
+  step: {
+    style: {
+      border-radius: 6
+      font-size: 18
+      font-color: "#172033"
+    }
+  }
+  group: {
+    style: {
+      fill: "#f8fafc"
+      stroke: "#94a3b8"
+      border-radius: 8
+      font-size: 20
+    }
+  }
+}
+
+controller: Controller {
+  class: step
+  style.fill: "#fee2e2"
+  style.stroke: "#dc2626"
+}
+observations: "Observations\nFindings, candidates, failures" {
+  class: step
+  style.fill: "#dcfce7"
+  style.stroke: "#16a34a"
+}
+prompts: Prompt set {
+  class: step
+  style.fill: "#cffafe"
+  style.stroke: "#0891b2"
+}
+memory: "Memory view\nfull / window / aide" {
+  class: step
+  style.fill: "#fef9c3"
+  style.stroke: "#a16207"
+}
+submission: Submission {class: step}
+
+exploration: Exploration {
+  class: group
+  direction: right
+  writer: Writer {class: step}
+  execution: "Harness\nRuns graph" {class: step}
+  interpreter: Interpreter {class: step}
+  findings: Findings {class: step}
+  writer -> execution -> interpreter -> findings
+}
+
+evaluation: "Evaluation lock\nRows, labels, CV, scorer" {class: step}
+
+expansion: Expansion {
+  class: group
+  direction: right
+  planner: Planner {class: step}
+  writer: Writer {class: step}
+  scoring: "Harness\nScores grid variants\non locked folds" {class: step}
+  repairer: Repairer {class: step}
+  planner -> writer -> scoring
+  scoring -> repairer: error
+  repairer -> scoring: retry
+}
+
+probe: "Probe\nFold scores and error summary" {class: step}
+candidates: Search tree of candidates {
+  class: step
+  style.fill: "#ede9fe"
+  style.stroke: "#7c3aed"
+}
+policy: "Search policy\ngreedy / draft-greedy / mcts / mcgs" {
+  class: step
+  style.fill: "#ffedd5"
+  style.stroke: "#ea580c"
+}
+
+observations -> controller
+controller -> exploration.writer: explore
+controller -> evaluation: establish_evaluation
+controller -> expansion.planner: expand
+controller -> probe: probe
+controller -> submission: stop
+expansion.planner -> exploration.writer: requests exploration
+exploration.findings -> observations
+expansion.scoring -> candidates -> observations
+probe -> observations
+evaluation -> expansion.scoring
+candidates -> policy
+policy -> controller: next parent
+policy -> expansion.planner: parent, references
+observations -> memory
+memory -> controller
+memory -> exploration
+memory -> expansion
+prompts -> controller
+prompts -> expansion
+prompts -> exploration: writer
