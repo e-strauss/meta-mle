@@ -262,8 +262,11 @@ predicted, also on label-related properties the prediction rows do not show. The
 compare candidate populations with the prediction rows on label-free observables,
 including an adversarial classifier (ROC AUC near 0.5 means indistinguishable; above
 about 0.55 counts as a difference). They always compare populations given by
-plausible selection rules, including filters on label-derived quantities, lock the
-one with the lowest AUC and report every compared AUC in the setup. The locked rows
+plausible selection rules, including filters on label-derived quantities and
+one-sided thresholds as well as bands, lock the one with the lowest AUC (the least
+restrictive among those within fold noise of it) and report every compared AUC in
+the setup. The setup does not restrict which labels later pipelines use: labelled
+rows outside the population stay available. The locked rows
 are also the training rows, and every experiment fits all folds on them. A quick
 learning curve before the lock, with a learned model (not priors or heuristics),
 sizes the population: each size is timed as an experiment runs it (features and

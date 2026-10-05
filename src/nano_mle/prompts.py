@@ -39,8 +39,12 @@ it is only as good as the evaluation setup is representative.
   they are indistinguishable. Read an AUC above about 0.55, or above its spread
   across folds, as a difference, not as minimal shift. Always compare the
   populations given by plausible selection rules, including filters on
-  label-derived quantities, scored with the same classifier, and lock the one with
-  the lowest AUC. The evaluation setup reports the AUC of every compared population.
+  label-derived quantities, scored with the same classifier. For a numeric
+  quantity, compare one-sided thresholds (at least, at most) as well as bands. Lock
+  the lowest AUC; among rules within the fold noise of it, prefer the least
+  restrictive, since excluding rows the prediction set may contain costs more than a
+  small observable difference. The evaluation setup reports the AUC of every
+  compared population.
 """,
         "training_pool": """- Training pool. The locked rows are the training rows as well as the test folds,
   and every later experiment fits all folds on them: size the population for the
@@ -196,7 +200,9 @@ State the hypothesis and the changes, grounded in findings, references and histo
 
     writer_rules = """
 Evaluation setup is unscored: it builds and audits the rows, labels, CV and scorer
-that every later pipeline is scored with. Use exploration evidence for it.
+that every later pipeline is scored with. Use exploration evidence for it. It does
+not restrict which labels later pipelines may use: labelled rows outside the locked
+population stay available to every pipeline as a label source.
 A repair fixes the planned experiment; a different hypothesis needs a new proposal.
 """
 
@@ -283,6 +289,11 @@ class Oct04(Prompts):
 """,
                    }
     control_texts = {}
+    writer_rules = """
+Evaluation setup is unscored: it builds and audits the rows, labels, CV and scorer
+that every later pipeline is scored with. Use exploration evidence for it.
+A repair fixes the planned experiment; a different hypothesis needs a new proposal.
+"""
     control_rules = """
 Choose the next action. Score differences smaller than the fold-score spread are
 ties, not trends: do not extrapolate a direction from them. Explore with a concrete
