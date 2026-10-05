@@ -196,3 +196,45 @@ def build():
     assert info["path"].endswith(".tsv")
     table = pd.read_csv(info["path"], sep="\t")
     assert len(table) == 20 and table["id"].min() == 1000
+
+
+def test_final_plans_post_process_predictions_through_transform(finished):
+    # Steps after a predictor also run while fitting, where they receive the fitted
+    # estimator; one that also transforms passes its predictions there (GUIDE).
+    workspace, task, paths = finished
+    source = f'''import pandas as pd
+import skrub
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.linear_model import Ridge
+
+FIT = {{}}
+PREDICT = {{}}
+FORMAT = None
+
+
+class Keyed(TransformerMixin, BaseEstimator):
+    def fit(self, X, y):
+        self.model_ = Ridge().fit(X.drop(columns=["id"]), y)
+        return self
+
+    def transform(self, X):
+        return pd.DataFrame({{"id": X["id"].to_numpy(),
+                              "pred": self.model_.predict(X.drop(columns=["id"]))}})
+
+    def predict(self, X):
+        return self.transform(X)
+
+
+def build():
+    fit_rows = skrub.as_data_op({paths["train"]!r}).skb.apply_func(pd.read_csv)
+    predict_rows = skrub.as_data_op({paths["test"]!r}).skb.apply_func(pd.read_csv)
+    rows = skrub.eval_mode().skb.match({{"predict": predict_rows}}, default=fit_rows)
+    y = rows["target"].skb.mark_as_y()
+    X = rows.drop(columns=["target"], errors="ignore").skb.mark_as_X()
+    pred = X.skb.apply(Keyed(), y=y)
+    return {{"submission": pred[["id", "pred"]].rename(columns={{"pred": "target"}})}}
+'''
+    record = submit(workspace, FinalBackend(source), task=task, max_repairs=0, notify=lambda *_: None)
+    assert record["status"] == "ok", record["result"]
+    table = pd.read_csv(record["result"]["submission"]["path"])
+    assert len(table) == 20 and list(table.columns) == ["id", "target"]

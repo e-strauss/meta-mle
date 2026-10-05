@@ -46,10 +46,13 @@ it is only as good as the evaluation setup is representative.
 """,
         "training_pool": """- Training pool. The locked rows are the training rows as well as the test folds.
   Size the population for the most data-hungry model you may try, not to the number
-  of prediction rows: before the lock, measure a quick learning curve with a learned
-  model in an exploration and choose the size from it. When runtime is what limits
-  the pool, say so in the setup, and prefer more training rows with smaller fixed
-  test folds over more folds. A large pool may keep its test folds a smaller fixed
+  of prediction rows: before the lock, measure a quick learning curve in an
+  exploration and choose the size from it. Fit the curve with a model that learns
+  from the rows, of the kind you expect to use, not with priors, counts or a
+  propagation heuristic, which saturate early whatever the data; if the curve still
+  rises at the largest size tried, take a larger pool. The setup names the model the curve used. When runtime is what
+  limits the pool, say so in the setup, and prefer more training rows with smaller
+  fixed test folds over more folds. A large pool may keep its test folds a smaller fixed
   subset (explicit folds or a custom splitter); train and test rows must not overlap.
 """,
         "model_families": """- Model families. Compare model families on the locked folds before tuning one:

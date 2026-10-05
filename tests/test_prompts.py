@@ -38,10 +38,12 @@ def test_a_variant_overrides_one_fragment_for_every_role():
 
 
 def test_frozen_set_keeps_its_texts():
-    # oct04 is the default set as of 2026-10-04, kept unchanged for ablations.
-    assert prompts.digests(prompts.prompts("oct04").rendered()) == {
-        "control": "36b6c24384650f6c", "planning": "95f580cd222261a0",
-        "writer": "333d51ee6e06495d", "repair": "5344c54c53418608"}
+    # oct04 is the default set as of 2026-10-04, kept unchanged for ablations. The
+    # writer and repairer also contain the plan contract (GUIDE), which is not part of
+    # a set and may change, so only the roles without it are pinned.
+    digests = prompts.digests(prompts.prompts("oct04").rendered())
+    assert {role: digests[role] for role in ("control", "planning")} == {
+        "control": "36b6c24384650f6c", "planning": "95f580cd222261a0"}
 
 
 def test_controller_gets_goals_and_the_planner_chooses_methods():

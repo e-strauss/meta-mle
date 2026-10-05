@@ -61,11 +61,14 @@ Plan contract (checked by the harness):
   rows = skrub.eval_mode().skb.match({'predict': predict_rows}, default=fit_rows),
   derive X and y from rows (y is evaluated only when fitting) and set FIT = PREDICT = {}.
   Without a FORMAT file, set OUTPUT_SEP = '\t' when the task asks for TSV output.
-  X.skb.apply(model, y=y) yields the model's predictions aligned with X's rows, with no
-  key columns: attach keys with rows[['key']].assign(...) or let the estimator's
-  predict return a DataFrame with the key. For top-k outputs (rankings, multi-label),
-  predict k columns per row and reshape them into the long table with DataOps (one
-  slice per rank, .skb.concat, a merge to map ids).
+  Steps after X.skb.apply(model, y=y) also run while fitting, where a predictor
+  passes on the fitted estimator itself, not predictions; indexing it fails ("object
+  is not subscriptable"). To post-process predictions, keep predict and also give
+  the estimator transform (and fit_transform) returning the same predictions. They
+  are aligned with X's rows, with no key columns: attach keys with
+  rows[['key']].assign(...) or return a DataFrame with the key. For top-k outputs (rankings, multi-label), predict k columns per row
+  and reshape them into the long table with DataOps (one slice per rank,
+  .skb.concat, a merge to map ids).
 - Named skrub.choose_from grids become one candidate per variant (within the
   evaluation budget). Children receive the parent's resolved configuration.
 - Return code without markdown fences. No credentials, no caching. Pipelines and

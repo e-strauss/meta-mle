@@ -259,8 +259,8 @@ about 0.55 counts as a difference). They always compare populations given by
 plausible selection rules, including filters on label-derived quantities, lock the
 one with the lowest AUC and report every compared AUC in the setup. The locked rows
 are also the training rows, so the population is sized for the most data-hungry
-model, from a quick learning curve before the lock, not to the number of prediction
-rows.
+model, from a quick learning curve with a learned model (not priors or heuristics)
+before the lock, not to the number of prediction rows.
 
 Model choice follows conventions shared by the controller and planner: compare model
 families before tuning one, with at least one that learns its parameters from the
