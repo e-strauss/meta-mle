@@ -250,6 +250,78 @@ re-implements or repairs. Repairs see the full traceback.
 
 ## How a run works
 
+```mermaid
+flowchart TB
+    CTRL[Controller]
+    OBS[Observations: findings, candidates, failures]
+    PR[Prompt set]
+    MEM[Memory view]
+    SUB[Submission]
+
+    subgraph EXPLORE[Exploration]
+        W1[Writer] --> X1[Harness runs graph] --> I1[Interpreter] --> F1[Findings]
+    end
+
+    LOCK[Evaluation lock: rows, labels, CV, scorer]
+
+    subgraph SEARCH[Expansion]
+        P2[Planner] --> W2[Writer] --> X2[Harness scores grid variants on locked folds]
+        X2 -- error --> R2[Repairer] --> X2
+    end
+
+    PROBE[Probe: fold scores and error summary]
+    ST[Search tree of candidates]
+    SP[Search policy]
+
+    subgraph POLICIES[Policies]
+        GR[greedy]
+        GD[draft-greedy]
+        MCTS[mcts]
+        MCGS[mcgs]
+    end
+
+    subgraph MEMORIES[Memories]
+        FULL[full]
+        WIN[window]
+        AIDE[aide]
+    end
+
+    OBS --> CTRL
+    CTRL -- explore --> W1
+    CTRL -- establish_evaluation --> LOCK
+    CTRL -- expand --> P2
+    CTRL -- probe --> PROBE
+    CTRL -- stop --> SUB
+    P2 -- requests exploration --> W1
+    F1 --> OBS
+    X2 --> ST --> OBS
+    PROBE --> OBS
+    LOCK --> X2
+    ST --> SP
+    SP -- next parent --> CTRL
+    SP -- parent, references --> P2
+    POLICIES -.- SP
+    OBS --> MEM
+    MEMORIES -.- MEM
+    MEM --> CTRL & EXPLORE & SEARCH
+    PR --> CTRL & SEARCH
+    PR -- writer --> EXPLORE
+
+    classDef red fill:#fb464c33,stroke:#fb464c
+    classDef orange fill:#e9973f33,stroke:#e9973f
+    classDef yellow fill:#e0de7133,stroke:#e0de71
+    classDef green fill:#44cf6e33,stroke:#44cf6e
+    classDef cyan fill:#53dfdd33,stroke:#53dfdd
+    classDef purple fill:#a882ff33,stroke:#a882ff
+
+    class CTRL red
+    class SP orange
+    class MEM yellow
+    class OBS green
+    class PR cyan
+    class ST purple
+```
+
 Before the evaluation lock, the controller, planner and writer are asked for a
 population check: labelled rows may be selected differently from the rows to be
 predicted, also on label-related properties the prediction rows do not show. They
