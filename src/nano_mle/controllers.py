@@ -48,7 +48,10 @@ class Auto:
             return Decision(action="stop", reason="auto: insufficient time for another expansion")
         parent = context["next_expansion_parent"]
         # The operator carries the instruction; the reason names it for the journal.
-        if parent["id"] == "root":
+        if parent.get("operator"):  # the policy names the operation
+            name = parent["operator"]
+            reason = f"auto: {name}"
+        elif parent["id"] == "root":
             name = "draft"
             reason = "auto: draft" + (f" {parent['draft_number']}/{parent['num_drafts']}"
                                       if "draft_number" in parent else "")

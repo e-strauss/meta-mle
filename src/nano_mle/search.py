@@ -13,6 +13,9 @@ class Selection:
     # Candidates an operator combines besides the parent (aggregation, crossover,
     # ensembles). Rewards still follow parent_id only.
     contributor_ids: list[str] = field(default_factory=list)
+    # The operator the policy chooses for this parent (operators.OPERATORS), or None
+    # to leave it to the controller.
+    operator: str | None = None
 
 
 class SearchPolicy(Protocol):
@@ -20,7 +23,13 @@ class SearchPolicy(Protocol):
 
     # state: the run's workflow state (read-only here); policies with populations or
     # stages keep theirs in it. Selection must not change anything: it is peeked.
-    def select(self, candidates: list[dict], stats: dict, step: int, state: dict | None = None) -> Selection: ...
+    # progress: the fraction of the run used (time, or expansions without a time budget).
+    def select(self, candidates: list[dict], stats: dict, step: int, state: dict | None = None,
+               progress: float | None = None) -> Selection: ...
+
+    # Optional: update(stats, state, candidates, new_candidates, step) -> (stats, state),
+    # called after each expansion; without it, every variant is backpropagated at once
+    # (update_stats) and the state is unchanged.
 
 
 def valid(candidates):
@@ -32,7 +41,7 @@ def valid(candidates):
 class Greedy:
     name = "greedy"
 
-    def select(self, candidates, stats, step, state=None):
+    def select(self, candidates, stats, step, state=None, progress=None):
         choices = valid(candidates)
         parent = max(choices, key=lambda c: c["score"])["id"] if choices else "root"
         return Selection(parent, [])
@@ -48,8 +57,8 @@ class DraftGreedy(Greedy):
             raise ValueError("num_drafts must be a non-negative integer")
         self.num_drafts = num_drafts
 
-    def select(self, candidates, stats, step, state=None):
-        return Selection("root", []) if step < self.num_drafts else super().select(candidates, stats, step, state)
+    def select(self, candidates, stats, step, state=None, progress=None):
+        return Selection("root", []) if step < self.num_drafts else super().select(candidates, stats, step, state, progress)
 
 
 class MCTS:
@@ -60,7 +69,7 @@ class MCTS:
     def __init__(self, exploration=1.414):
         self.exploration = exploration
 
-    def select(self, candidates, stats, step, state=None):
+    def select(self, candidates, stats, step, state=None, progress=None):
         parent = "root"
         while True:
             children = [c for c in candidates if c["parent_id"] == parent]
@@ -94,14 +103,14 @@ class MCGS(MCTS):
         self.max_steps = max_steps
         self.seed = seed
 
-    def select(self, candidates, stats, step, state=None):
+    def select(self, candidates, stats, step, state=None, progress=None):
         progress = min(1.0, step / self.max_steps)
         rng = random.Random(self.seed + step)
         elite = sorted(valid(candidates), key=lambda c: c["score"], reverse=True)[:3]
         if elite and rng.random() > max(0.2, 1 - progress):
             parent = rng.choices(elite, weights=[1 / (i + 1) for i in range(len(elite))])[0]["id"]
         else:
-            parent = super().select(candidates, stats, step, state).parent_id
+            parent = super().select(candidates, stats, step, state, progress).parent_id
         ancestors = {parent}
         lookup = {c["id"]: c for c in candidates}
         cursor = parent
@@ -112,8 +121,11 @@ class MCGS(MCTS):
 
 
 def policy(name, max_steps, params=None):
+    from .mlevolve import MLEvolve
+
     return {"greedy": Greedy, "draft-greedy": DraftGreedy, "mcts": MCTS,
-            "mcgs": lambda **kwargs: MCGS(max_steps, **kwargs)}[name](**(params or {}))
+            "mcgs": lambda **kwargs: MCGS(max_steps, **kwargs),
+            "mlevolve": lambda **kwargs: MLEvolve(max_steps, **kwargs)}[name](**(params or {}))
 
 
 def update_stats(stats, candidates, new_candidates, baseline):

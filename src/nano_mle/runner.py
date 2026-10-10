@@ -443,25 +443,42 @@ class Runner:
         export_workspace(self.store)
 
     def peek(self):
+        """Reuses the selection shown to the controller while no expansion has run since:
+        a policy that depends on elapsed time would otherwise see a later time."""
+        step = self.counts()["expansions"]
+        if getattr(self, "_peeked", (None,))[0] != step:
+            self._peeked = (step, self._select())
+        return self._peeked[1]
+
+    def _select(self):
         """The parent the search policy would expand next. Selection has no side effects
         (statistics change only after an expansion), so peeking before the controller
         call and selecting at expansion time agree."""
         return self.policy.select(self.store.records("candidate"), self.store.meta("search_stats"),
-                                  self.counts()["expansions"], self.store.meta("workflow_state", {}))
+                                  self.counts()["expansions"], self.store.meta("workflow_state", {}),
+                                  self.progress())
+
+    def progress(self):
+        """The fraction of the run used: of the time budget, or of the expansions without one."""
+        if self.budget.max_wall_seconds:
+            return min(1.0, self.store.meta("elapsed_s", 0.0) / self.budget.max_wall_seconds)
+        return min(1.0, self.counts()["expansions"] / self.budget.max_expansions)
 
     def next_parent_context(self):
         if self.store.meta("contract") is None:
             return None
         selection = self.peek()
+        chosen = ({"operator": selection.operator} if selection.operator else {}) | (
+            {"contributor_ids": selection.contributor_ids} if selection.contributor_ids else {})
         if selection.parent_id == "root":
-            parent = {"id": "root", "note": "a new pipeline from the locked evaluation"}
+            parent = {"id": "root", "note": "a new pipeline from the locked evaluation", **chosen}
             if self.policy.name == "draft-greedy" and self.counts()["expansions"] < self.policy.num_drafts:
                 parent.update(draft_number=self.counts()["expansions"] + 1, num_drafts=self.policy.num_drafts)
             return parent
         parent = self.store.get(selection.parent_id)
         return {"id": parent["id"], "score": parent.get("score"), "fold_scores": parent.get("fold_scores"),
-                "configuration": parent.get("configuration_description"),
-                "description": parent.get("description"), "reference_ids": selection.reference_ids}
+                "configuration": parent.get("configuration_description"), "status": parent.get("status"),
+                "description": parent.get("description"), "reference_ids": selection.reference_ids, **chosen}
 
     def plan(self, record, selection, extra, direction):
         """The planner's experiment, after the explorations it requests; None when it
@@ -494,7 +511,7 @@ class Runner:
             raise ValueError("Search budget exhausted")
         old_candidates = self.store.records("candidate")
         selection = self.peek()
-        op = operator(operator_name or "free")
+        op = operator(operator_name or selection.operator or "free")
         op.check(selection)
         state = self.store.meta("workflow_state", {})
         record = {"id": new_id("expansion"), "parent_id": selection.parent_id,
@@ -552,8 +569,12 @@ class Runner:
                                    "source_path": str(source_path.relative_to(self.workspace)),
                                    "source_sha256": digest(source_path)})
         baseline = max((c["score"] for c in valid(old_candidates)), default=None)
-        stats = update_stats(self.store.meta("search_stats"), old_candidates + new_candidates,
-                             new_candidates, baseline)
+        if hasattr(self.policy, "update"):
+            stats, state = self.policy.update(self.store.meta("search_stats"), state, old_candidates + new_candidates,
+                                              new_candidates, self.counts()["expansions"])
+        else:
+            stats = update_stats(self.store.meta("search_stats"), old_candidates + new_candidates,
+                                 new_candidates, baseline)
         record["candidate_ids"] = [c["id"] for c in new_candidates]
         state = op.after(record, new_candidates, state)
         self.store.commit_expansion(record, new_candidates, stats, state)
