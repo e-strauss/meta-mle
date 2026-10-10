@@ -47,15 +47,16 @@ class Auto:
                 (recent and remaining < self.time_margin * max(recent))):
             return Decision(action="stop", reason="auto: insufficient time for another expansion")
         parent = context["next_expansion_parent"]
+        # The operator carries the instruction; the reason names it for the journal.
         if parent["id"] == "root":
-            progress = (f" {parent['draft_number']}/{parent['num_drafts']}"
-                        if "draft_number" in parent else "")
-            reason = f"auto: draft{progress}: propose a new, simple solution, different from the existing drafts."
+            name = "draft"
+            reason = "auto: draft" + (f" {parent['draft_number']}/{parent['num_drafts']}"
+                                      if "draft_number" in parent else "")
         else:
-            reason = "auto: improve: propose one change to the selected parent whose effect on the score can be measured."
+            name, reason = "improve", "auto: improve"
         if budget["max_requested_explorations"] == 0:
-            reason += " Propose an experiment directly; do not request exploration."
-        return Decision(action="expand", reason=reason)
+            reason += ". Propose an experiment directly; do not request exploration."
+        return Decision(action="expand", operator=name, reason=reason)
 
 
 CONTROLLERS = {"llm": LLM, "auto": Auto}

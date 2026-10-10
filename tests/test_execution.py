@@ -81,7 +81,7 @@ def build():
     data = skrub.as_data_op({str(missing)!r}).skb.apply_func(pd.read_csv)
     X = data.drop(columns=["y"]).skb.mark_as_X(cv=KFold(2), split_kwargs={{}})
     y = data["y"].skb.mark_as_y()
-    return {{"pred": X.skb.apply(Ridge(), y=y), "scoring": "r2"}}
+    return {{"pred": X.skb.apply(Ridge(), y=y).skb.set_name('model'), "scoring": "r2"}}
 ''')
     svg = draw_svg(attempt)
     assert b"<svg" in svg and b"Ridge" in svg

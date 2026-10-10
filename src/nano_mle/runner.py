@@ -13,6 +13,7 @@ from .controllers import controller
 from .contracts import create_contract, digest, source_manifest, verify_contract
 from .execution import run_plan
 from .models import Budget, Task
+from .operators import operator
 from .libraries import record_missing
 from .memory import Journal, memory
 from .prompts import chosen_prompts, digests, prompts
@@ -27,7 +28,7 @@ class ModelCallBudgetExceeded(RuntimeError):
 
 
 def initialize(workspace: Path, task: Task, budget: Budget, search_policy="greedy", memory_name="window",
-               controller_name="llm", prompts_name="default"):
+               controller_name="llm", prompts_name="default", profile=None):
     manifest = source_manifest(task)
     config = load_config()
     params = config["memory"].get(memory_name, {})
@@ -54,8 +55,11 @@ def initialize(workspace: Path, task: Task, budget: Budget, search_policy="greed
         store.set_meta("state", "ready")
         store.set_meta("actions", 0)
         store.set_meta("search_stats", {})
+        store.set_meta("workflow_state", {})
+        # The profile only chose defaults; the components above are what the run uses.
+        store.set_meta("profile", profile)
         store.event("initialized", policy=search_policy, memory=memory_name, controller=controller_name,
-                    prompts=prompts_name)
+                    prompts=prompts_name, profile=profile)
         export_workspace(store)
     finally:
         store.close()
@@ -420,7 +424,7 @@ class Runner:
         (statistics change only after an expansion), so peeking before the controller
         call and selecting at expansion time agree."""
         return self.policy.select(self.store.records("candidate"), self.store.meta("search_stats"),
-                                  self.counts()["expansions"])
+                                  self.counts()["expansions"], self.store.meta("workflow_state", {}))
 
     def next_parent_context(self):
         if self.store.meta("contract") is None:
@@ -436,7 +440,7 @@ class Runner:
                 "configuration": parent.get("configuration_description"),
                 "description": parent.get("description"), "reference_ids": selection.reference_ids}
 
-    def expand(self, direction=None):
+    def expand(self, direction=None, operator_name=None):
         contract = self.store.meta("contract")
         if contract is None:
             raise ValueError("Establish evaluation before expanding")
@@ -446,17 +450,23 @@ class Runner:
             raise ValueError("Search budget exhausted")
         old_candidates = self.store.records("candidate")
         selection = self.peek()
+        op = operator(operator_name or "free")
+        op.check(selection)
+        state = self.store.meta("workflow_state", {})
         record = {"id": new_id("expansion"), "parent_id": selection.parent_id,
-                  "reference_ids": selection.reference_ids, "status": "running", "attempt_ids": [],
+                  "reference_ids": selection.reference_ids, "contributor_ids": selection.contributor_ids,
+                  "operator": op.name, "status": "running", "attempt_ids": [],
                   "exploration_ids": [], "direction": direction}
         self.store.put("expansion", record)
-        self.notify(f"Expand {selection.parent_id} ({self.policy.name})")
+        self.notify(f"Expand {selection.parent_id} ({self.policy.name}, {op.name})")
+        extra = {"controller_direction": direction, **op.extra_context(Journal(self.store), selection, state)}
+        if op.instruction:
+            extra["operator"] = {"name": op.name, "instruction": op.instruction}
         requested = 0
         while True:
             # The controller's reason for expanding is the requested direction; the
             # planner grounds the concrete experiment in it and the selected parent.
-            scope = {"selection": selection, "requested": requested,
-                     "extra": {"controller_direction": direction}}
+            scope = {"selection": selection, "requested": requested, "extra": extra}
             context = self.context("plan", query=direction, **scope)
             proposal = self.call("plan", context=context)
             if proposal.action == "experiment":
@@ -496,6 +506,8 @@ class Runner:
         for variant in variants:
             new_candidates.append({**variant, "id": f"{record['id']}_variant_{variant['index'] + 1}",
                                    "parent_id": selection.parent_id, "reference_ids": selection.reference_ids,
+                                   "contributor_ids": selection.contributor_ids, "operator": op.name,
+                                   "selectable": op.selectable, "blocks": result.get("blocks", []),
                                    "finding_ids": record["finding_ids"], "batch_id": record["id"],
                                    "description": proposal.description, "contract_id": contract["id"],
                                    "source_path": str(source_path.relative_to(self.workspace)),
@@ -504,7 +516,8 @@ class Runner:
         stats = update_stats(self.store.meta("search_stats"), old_candidates + new_candidates,
                              new_candidates, baseline)
         record["candidate_ids"] = [c["id"] for c in new_candidates]
-        self.store.commit_expansion(record, new_candidates, stats)
+        state = op.after(record, new_candidates, state)
+        self.store.commit_expansion(record, new_candidates, stats, state)
         self.notify(f"  Recorded {len(new_candidates)} candidate(s): " +
                     ", ".join(str(c["score"]) if c["status"] == "ok" else "failed" for c in new_candidates))
         export_workspace(self.store)
@@ -559,7 +572,7 @@ class Runner:
                 elif decision.action == "probe":
                     self.probe(decision)
                 else:
-                    self.expand(decision.reason)
+                    self.expand(decision.reason, decision.operator)
             except ValueError as error:
                 self.fail_active(str(error))
                 self.store.event("action_rejected", error=str(error))

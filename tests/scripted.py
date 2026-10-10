@@ -47,7 +47,7 @@ from sklearn.linear_model import Ridge
 def build():
     setup = build_evaluation()
     encoded = setup['X'].skb.apply(skrub.TableVectorizer())
-    pred = encoded.skb.apply(Ridge(alpha={alpha}), y=setup['y'])
+    pred = encoded.skb.apply(Ridge(alpha={alpha}), y=setup['y']).skb.set_name('model')
     return {{'pred': pred, 'scoring': setup['scoring']}}
 """
 

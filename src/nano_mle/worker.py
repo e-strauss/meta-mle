@@ -20,7 +20,7 @@ from sklearn.model_selection import ParameterGrid
 from .config import grid_n_jobs
 from .contracts import ContractDrift, contract_folds, save_folds, verify_contract
 from .evaluation import audit_boundary
-from .graphs import check_reads, is_source, validate_graph
+from .graphs import blocks, check_reads, is_source, validate_graph
 from .plans import validate_source
 from .timing import Phases
 
@@ -397,6 +397,7 @@ def execute(request, directory, phases):
         return probe(result, contract, request, directory, phases, started, evaluated.get("row_keys"))
     keys = evaluated.get("row_keys")
     pred = result["pred"]
+    names = blocks(pred)
     with phases("graph_artifact", output="pipeline"):
         graph_artifact(pred, directory / "pipeline")
     with phases("learner_and_grid"):
@@ -463,7 +464,7 @@ def execute(request, directory, phases):
                 variant["oof_file"] = name
     with phases("verify_contract"):
         verify_contract(contract)
-    return {"status": "ok", "variants": variants, "duration_s": time.monotonic() - started,
+    return {"status": "ok", "variants": variants, "blocks": names, "duration_s": time.monotonic() - started,
             "contract_id": contract["id"], "fold_fingerprint": contract["fold_fingerprint"]}
 
 

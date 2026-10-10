@@ -123,7 +123,7 @@ from sklearn.linear_model import Ridge
 def build():
     setup = build_evaluation()
     model = Ridge(alpha=skrub.choose_from([1.0, 2.0, 3.0], name='alpha'))
-    return {'pred': setup['X'].skb.apply(model, y=setup['y']), 'scoring': setup['scoring']}
+    return {'pred': setup['X'].skb.apply(model, y=setup['y']).skb.set_name('model'), 'scoring': setup['scoring']}
 """
 
 

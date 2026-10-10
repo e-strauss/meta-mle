@@ -106,27 +106,28 @@ then expands automatically. It supplies the planner with a direction to draft a
 new, simple and different solution when the selected parent is root, or make one
 measurable change when a candidate is selected.
 
-The `aide` preset selects `auto`, `draft-greedy`, `aide` memory, and
-`--max-requested-explorations 0`:
+An agent **profile** (`--profile NAME`, registry in `profiles.py`; `--preset` is
+the older spelling) supplies default component choices. The `aide` profile selects
+`auto`, `draft-greedy`, `aide` memory, and `--max-requested-explorations 0`:
 
 ```bash
-uv run nano-mle init workspaces/aide-run --task task.json --preset aide \
+uv run nano-mle init workspaces/aide-run --task task.json --profile aide \
   --max-expansions 20 --max-evaluations 80 --max-actions 40 --max-model-calls 160 \
   --execution-timeout 1800 --time-budget 8h
 uv run nano-mle run workspaces/aide-run --model openai/gpt-6.1-sol
 ```
 
-Explicit flags override the preset regardless of their order. For example,
-`--preset aide --memory window` compares memories, while
-`--preset aide --controller llm --max-requested-explorations 2` lets the LLM choose
+Explicit flags override the profile regardless of their order. For example,
+`--profile aide --memory window` compares memories, while
+`--profile aide --controller llm --max-requested-explorations 2` lets the LLM choose
 actions and permits the planner to request explorations inside an expansion.
-Without a preset, that exploration limit defaults to 2, including with `auto`.
+Without a profile, that exploration limit defaults to 2, including with `auto`.
 Other budgets retain their existing defaults and CLI controls.
 
 Set parameters in TOML, such as `[policy.draft-greedy] num_drafts = 5`,
 `[policy.mcts] exploration = 1.414`, `[policy.mcgs] seed = 42`, and
 `[memory.aide] explorations = 4`. The workspace records the resolved component
-names and parameters, rather than a preset name. Resume uses those saved settings;
+names and parameters, and the profile name only as information. Resume uses those saved settings;
 changing TOML does not change them. Older workspaces retain the LLM controller and
 the original policy defaults. `workspace.json` and the report expose the choices;
 automatic decisions use the usual `controller_decision` journal events.
@@ -146,9 +147,9 @@ and final submission. It omits AIDE's probabilistic debugging of failed tree nod
 and per-program LLM reviews. AIDE's `max_debug_depth` counts a debug path across
 search steps; our `max_repairs` limits repairs inside one expansion and is not an
 equivalent setting. Grids create several candidates per expansion, so choose an
-evaluation budget large enough for them. The preset disables planner-requested
+evaluation budget large enough for them. The profile disables planner-requested
 explorations; a request is rejected and its failed expansion still counts.
-`[prompts.default] data_volume_study` is a prompt setting, not part of the preset; its
+`[prompts.default] data_volume_study` is a prompt setting, not part of the profile; its
 learning-curve convention can take up a draft, so disable it in a separate config
 for runs meant to be closer to AIDE.
 
@@ -305,7 +306,7 @@ A single loop dispatches one controller decision at a time:
 |---|---|---|
 | `explore` | The writer produces a graph answering a concrete question; outputs are evaluated and an interpreter turns them into scoped findings. It may fit models for quick evidence, but never produces candidates. | No |
 | `establish_evaluation` | The writer constructs the modelling population, raw labels, CV and scorer. The harness audits and locks them. | No |
-| `expand` | The search policy selects a parent (peeked before the controller call, so the controller's reason is written for it); the planner proposes a bounded change (or requests an exploration first); the writer implements it; every grid variant is scored and becomes its own candidate (`<expansion>_variant_N`, shown as v1, v2, …), which later expansions can select as a parent with its grid values resolved. | Yes |
+| `expand` | An [operator](#operators) names the kind of experiment. The search policy selects a parent (peeked before the controller call, so the controller's reason is written for it); the planner proposes a bounded change (or requests an exploration first); the writer implements it; every grid variant is scored and becomes its own candidate (`<expansion>_variant_N`, shown as v1, v2, …), which later expansions can select as a parent with its grid values resolved. | Yes |
 | `probe` | Reports, for an existing candidate, the out-of-fold predictions kept when it was scored (fitting it again only if none were kept), or fits a pipeline the writer builds on the locked folds; reports its fold scores and a harness-computed error summary of its out-of-fold predictions. | No |
 | `stop` | Ends the run. | |
 
@@ -457,9 +458,15 @@ def build():
     setup = build_evaluation()
     encoded = setup["X"].skb.apply(skrub.TableVectorizer())
     model = Ridge(alpha=skrub.choose_from([0.1, 10.0], name="alpha"))
-    pred = encoded.skb.apply(model, y=setup["y"])
+    pred = encoded.skb.apply(model, y=setup["y"]).skb.set_name("model")
     return {"pred": pred, "scoring": setup["scoring"]}
 ```
+
+**Named blocks.** Pipelines name the last step of each feature block and the model
+(which is `pred`) with `.skb.set_name`. The harness rejects a pipeline whose `pred`
+is unnamed and records each candidate's blocks (`blocks`, in graph order), so
+operators and memories can refer to components. Names are not part of the
+fingerprints, so naming never drifts the evaluation contract.
 
 **Scoring.** The setup's `scoring` is either a scikit-learn scorer string or a plain
 function `scorer(estimator, X, y) -> float` defined in the setup (higher is better).
@@ -561,6 +568,27 @@ reproduce its full operator set.
 The reward is backpropagated along the parent chain. Variants of one grid are
 siblings under the same parent.
 
+## Operators
+
+Every expansion runs the same pipeline (planner, Skrub writer, inner repairs, harness
+scoring). Its operator (`operators.py`, named in the decision's `operator`) adds an
+instruction for the planner and writer (`context.operator`), extra context, whether
+its candidates may become parents, and an update of the run's `workflow_state`,
+which is committed in the same transaction as the candidates, so resume is exact.
+Policies read that state but never change it. Candidates record `operator`,
+`contributor_ids` (other candidates an operator combines; rewards still follow the
+parent) and `selectable` (diagnostic variants such as ablations are scored but never
+selected or submitted).
+
+| Operator | Parent | Used by |
+|---|---|---|
+| `free` | any | the LLM controller: the controller's reason describes the experiment |
+| `draft` | root | `auto`: a new, simple solution, different from the existing drafts |
+| `improve` | a candidate | `auto`: one measurable change to the parent |
+
+Further operators and profiles for other agents are planned in
+[docs/meta-harness-plan.md](docs/meta-harness-plan.md).
+
 ## Workspace
 
 ```
@@ -590,6 +618,8 @@ still shows which phase was running.
 | `cli.py` | Entry point: `init`, `run`, `submit`, `show`, `draw`. |
 | `runner.py` | Controller loop, budgets, repair loop, exploration/setup/expansion, report export, resume. |
 | `controllers.py` | LLM and automatic next-action strategies. |
+| `operators.py` | Experiment operators: instruction, parent rule, selectability, workflow-state update. |
+| `profiles.py` | Agent profiles: named default component choices. |
 | `memory.py` | Memory protocol, read-only journal view, `window` and `full` memories. |
 | `agents.py` | DSPy backend: controller, planner, writer, repairer and interpreter signatures. |
 | `prompts.py` | Prompt sets: named fragments assembled into the controller, planner, writer and repairer instructions; registry of variants. |

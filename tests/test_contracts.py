@@ -32,7 +32,7 @@ def test_equivalent_graph_and_downstream_features(data):
     contract = lock(boundary(data))
     verify_contract(contract)
     rebuilt = boundary(data)
-    pred = rebuilt['X'].drop(columns=['group']).skb.apply(Ridge(), y=rebuilt['y'])
+    pred = rebuilt['X'].drop(columns=['group']).skb.apply(Ridge(), y=rebuilt['y']).skb.set_name('model')
     assert audit_boundary({'pred': pred, 'scoring':'r2'}, contract)['fold_fingerprint'] == contract['fold_fingerprint']
 
 

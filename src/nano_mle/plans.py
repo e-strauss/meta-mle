@@ -63,6 +63,12 @@ Plan contract (checked by the harness):
   setup scoring, 'row_keys': the same DataOp if declared}. The harness compares the
   X/y/CV/scoring/row-key graphs and the folds with the lock before fitting; drift is
   rejected. Keep the row count and order of X.
+- Pipelines name their blocks with .skb.set_name('<block>'): the last step of each
+  feature block (e.g. 'dates', 'text_tfidf', 'target_encoding') and the model, which
+  is pred itself, e.g. pred = features.skb.apply(model, y=y).skb.set_name('model').
+  Blocks are how experiments refer to components (to change, remove or combine
+  them), so give each its own descriptive name, distinct from choose_from names; a
+  parent's blocks keep their names.
 - A probe is written like a pipeline with a single configuration (no choose_from).
   The harness fits it on the locked folds and reports its fold scores, an error
   summary of its out-of-fold predictions (per-class recall and confusion, calibration

@@ -37,7 +37,7 @@ def test_cli_resolves_presets_and_explicit_overrides(tmp_path, monkeypatch, flag
         assert store.meta("budget")["max_requested_explorations"] == requested
         assert store.meta("budget")["max_expansions"] == 6  # presets do not change other budgets
         assert store.records("model_call") == []
-        assert store.meta("preset") is None
+        assert store.meta("profile") == ("aide" if "--preset" in flags else None)
     finally:
         store.close()
 

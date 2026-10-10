@@ -4,7 +4,7 @@ nano-mle becomes a meta-harness: each MLE agent is a **profile**, a composition 
 shared components, instead of a custom harness. Agents are reproduced in their
 core ideas, adapted to Skrub plans; deviations are documented per profile.
 
-Status: planned (2026-10-10). Work across several sessions; tick phases off here.
+Status: Phase 0 done (2026-10-10). Work across several sessions; tick phases off here.
 
 ## Fixed (never per profile)
 
@@ -71,14 +71,16 @@ anyway. May return later as a probe-style diagnostic only.
 ## Phases (priority: MLEvolve, AIDE, FM-Agent, MLE-STAR)
 
 ### Phase 0: refactor, no behaviour change
-- [ ] `operators.py`: Operator protocol, registry; `free`, `draft`, `improve`.
-- [ ] `Decision` gets `operator`; candidate fields above; old workspaces default.
-- [ ] `Controller` -> `Workflow` (keep `llm`, `auto`); `workflow_state` meta.
-- [ ] `Selection` gets `contributor_ids`.
-- [ ] Profile registry (`profiles.py`); `--profile NAME`; `--preset aide` maps to it.
-- [ ] Named-block writer rule + lint/graph check that blocks are named; record
-      block names per candidate.
-- [ ] Tests: existing suite green; resume with `workflow_state`.
+- [x] `operators.py`: Operator class, registry; `free`, `draft`, `improve`.
+- [x] `Decision` gets `operator`; candidate fields above; old workspaces default.
+- [x] `workflow_state` meta, committed with the candidates. Decided: the
+      controller keeps its name (no rename to Workflow; README and CLI use it);
+      controllers read the state through `journal.meta("workflow_state")`.
+- [x] `Selection` gets `contributor_ids`; `select(..., state)`.
+- [x] Profile registry (`profiles.py`); `--profile NAME`; `--preset` is an alias.
+- [x] Named blocks: `.skb.set_name` on each feature block's last step and on
+      `pred` (required, checked in the worker); `blocks` recorded per candidate.
+- [x] Tests: existing suite green; `tests/test_operators.py`.
 
 ### Phase 1: switches and data modes
 - [ ] Planner off: operation direction goes straight to the writer.
@@ -124,4 +126,3 @@ anyway. May return later as a probe-style diagnostic only.
 
 ## Open decisions
 - Web-search provider for Knowledge (TODO, needed only for FM-Agent and MLE-STAR).
-- Exact named-block convention (node name prefix vs. returned `blocks` dict): Phase 0.

@@ -63,7 +63,9 @@ class Store:
     def close(self):
         self.db.close()
 
-    def commit_expansion(self, expansion, candidates, stats):
+    def commit_expansion(self, expansion, candidates, stats, workflow_state=None):
+        """Candidates, search statistics and workflow state change together, so a
+        resumed run never sees one without the others."""
         with self.db:
             for candidate in candidates:
                 self.db.execute("INSERT INTO records(kind,id,payload) VALUES ('candidate',?,?)",
@@ -71,6 +73,9 @@ class Store:
             self.db.execute("UPDATE records SET payload=? WHERE id=?",
                             (json.dumps(expansion), expansion["id"]))
             self.db.execute("INSERT OR REPLACE INTO meta VALUES ('search_stats',?)", (json.dumps(stats),))
+            if workflow_state is not None:
+                self.db.execute("INSERT OR REPLACE INTO meta VALUES ('workflow_state',?)",
+                                (json.dumps(workflow_state),))
         for listener in self.listeners:
             for candidate in candidates:
                 listener("candidate", candidate)

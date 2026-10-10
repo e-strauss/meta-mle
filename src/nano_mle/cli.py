@@ -4,18 +4,16 @@ import argparse
 import json
 from pathlib import Path
 
-
-PRESETS = {"aide": {"controller": "auto", "policy": "draft-greedy", "memory": "aide",
-                    "max_requested_explorations": 0}}
+from .profiles import PROFILES
 
 
 def resolve_settings(args):
-    """Existing defaults, then the preset, then explicitly supplied init flags."""
+    """Existing defaults, then the profile, then explicitly supplied init flags."""
     from .models import Budget
 
     defaults = {"controller": "llm", "policy": "greedy", "memory": "window", "prompts": "default",
                 "max_requested_explorations": Budget.model_fields["max_requested_explorations"].default}
-    defaults.update(PRESETS.get(args.preset, {}))
+    defaults.update(PROFILES.get(args.profile, {}))
     return {key: getattr(args, key) if getattr(args, key) is not None else value
             for key, value in defaults.items()}
 
@@ -45,7 +43,8 @@ def main():
     init = sub.add_parser("init", help="Initialize a workspace; makes no model calls")
     init.add_argument("workspace", type=Path)
     init.add_argument("--task", required=True, type=Path)
-    init.add_argument("--preset", choices=list(PRESETS), help="Default component choices; explicit flags override")
+    init.add_argument("--profile", "--preset", dest="profile", choices=list(PROFILES),
+                      help="Agent profile: default component choices; explicit flags override")
     init.add_argument("--controller", choices=["llm", "auto"],
                       help="Next-action strategy (default: llm); auto expands after evaluation is locked")
     init.add_argument("--policy", choices=["greedy", "draft-greedy", "mcts", "mcgs"],
@@ -105,7 +104,7 @@ def main():
                         execution_timeout=args.execution_timeout,
                         max_model_calls=args.max_model_calls, max_wall_seconds=args.time_budget)
         initialize(args.workspace.resolve(), load_task(args.task), budget, settings["policy"],
-                   settings["memory"], settings["controller"], settings["prompts"])
+                   settings["memory"], settings["controller"], settings["prompts"], args.profile)
         print(f"Initialized {args.workspace.resolve()}")
     elif args.command == "run":
         from .agents import DSPyBackend

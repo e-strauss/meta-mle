@@ -62,14 +62,12 @@ def test_auto_directions_follow_the_selected_parent():
     draft_context = context(max_requested_explorations=0)
     draft_context["next_expansion_parent"].update(draft_number=3, num_drafts=5)
     draft = Auto().decide(draft_context, no_model, EMPTY)
-    assert draft.action == "expand" and "draft 3/5" in draft.reason
-    assert "different from the existing drafts" in draft.reason
+    assert draft.action == "expand" and draft.operator == "draft" and "draft 3/5" in draft.reason
     assert "do not request exploration" in draft.reason
-    # A root chosen by any other policy still gets a draft direction.
-    assert "auto: draft:" in Auto().decide(context(), no_model, EMPTY).reason
+    # A root chosen by any other policy still gets a draft.
+    assert Auto().decide(context(), no_model, EMPTY).operator == "draft"
     improve = Auto().decide(context(parent="winner"), no_model, EMPTY)
-    assert "auto: improve:" in improve.reason and "one change" in improve.reason
-    assert "do not request exploration" not in improve.reason
+    assert improve.operator == "improve" and improve.reason == "auto: improve"
 
 
 @pytest.mark.parametrize("remaining,history,margin,action", [
@@ -185,7 +183,7 @@ def test_failed_planner_drafts_count_and_requested_explorations_do_not_run(tmp_p
         assert [e["status"] for e in expansions] == ["ok", "failed", "ok"]
         assert "candidate_ids" not in expansions[1]
         assert expansions[2]["parent_id"] == expansions[0]["candidate_ids"][0]
-        assert "auto: improve:" in expansions[2]["direction"]
+        assert expansions[2]["operator"] == "improve"
         assert len(store.records("exploration")) == 1
         assert len(store.records("candidate")) == 3
         assert not events(store, "action_rejected")
@@ -202,7 +200,7 @@ def test_auto_remains_independent_of_policy_and_memory(tmp_path, policy):
     for plan in backend.plans:
         assert "recent_failures" in plan  # window memory
         stage = "draft" if plan["selection"]["parent_id"] == "root" else "improve"
-        assert f"auto: {stage}:" in plan["controller_direction"]
+        assert plan["operator"]["name"] == stage and plan["operator"]["instruction"]
 
 
 def test_auto_time_stop_reaches_the_journal_without_a_rejected_action(tmp_path, monkeypatch):

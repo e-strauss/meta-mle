@@ -44,6 +44,9 @@ class Decision(Model):
     # probe: out-of-fold predictions of an existing candidate (candidate_id) or of a
     # pipeline the writer builds for the question; read later by explorations.
     candidate_id: str | None = None
+    # expand: the kind of experiment (operators.OPERATORS); None is a free experiment
+    # described by the reason alone.
+    operator: str | None = None
 
     @model_validator(mode="after")
     def check_payload(self):
@@ -53,6 +56,10 @@ class Decision(Model):
             raise ValueError("establish_evaluation needs evaluation")
         if self.action == "probe" and not self.question:
             raise ValueError("probe needs a question it serves")
+        if self.operator is not None:
+            from .operators import OPERATORS
+            if self.operator not in OPERATORS:
+                raise ValueError(f"operator must be one of {sorted(OPERATORS)}")
         return self
 
 

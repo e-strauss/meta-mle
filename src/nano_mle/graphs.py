@@ -88,6 +88,28 @@ def validate_graph(plan):
                 raise ValueError("Callable map is opaque; dictionary/Series maps are supported")
 
 
+MODEL_BLOCK = ("Name the pipeline's blocks: pred must be a named model block, e.g. "
+               "pred = features.skb.apply(model, y=y).skb.set_name('model'); name each "
+               "feature block the same way with .skb.set_name('<block>')")
+
+
+def blocks(pred):
+    """Named feature and model blocks downstream of the evaluation boundary (X, y and
+    what builds them), in graph order. Names are set with .skb.set_name; variables are
+    not blocks. Names are not part of the fingerprints, so naming never drifts the
+    contract."""
+    from skrub._data_ops._evaluation import graph
+
+    nodes = graph(pred)["nodes"].values()
+    upstream = {id(node._skrub_impl) for marked in nodes if marked._skrub_impl.is_X or marked._skrub_impl.is_y
+                for node in graph(marked)["nodes"].values()}
+    if not pred._skrub_impl.name or id(pred._skrub_impl) in upstream:
+        raise ValueError(MODEL_BLOCK)
+    return [node._skrub_impl.name for node in nodes
+            if node._skrub_impl.name and type(node._skrub_impl).__name__ != "Var"
+            and id(node._skrub_impl) not in upstream]
+
+
 def class_methods(cls):
     """Source fingerprint of a plan-defined class, so edits to it count as drift."""
     return {name: ast.dump(ast.parse(textwrap.dedent(inspect.getsource(method))))

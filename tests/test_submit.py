@@ -19,7 +19,7 @@ def build():
     rows = skrub.var("rows").skb.apply_func(pd.read_csv)
     y = rows["target"].skb.mark_as_y()
     X = rows.drop(columns=["id", "target"], errors="ignore").skb.mark_as_X()
-    pred = X.skb.apply(Ridge(), y=y)
+    pred = X.skb.apply(Ridge(), y=y).skb.set_name('model')
     return {{"submission": rows[["id"]].assign(target=pred)}}
 '''
 
@@ -187,7 +187,7 @@ def build():
     rows = skrub.eval_mode().skb.match({{"predict": predict_rows}}, default=fit_rows)
     y = rows["target"].skb.mark_as_y()
     X = rows.drop(columns=["id", "target"], errors="ignore").skb.mark_as_X()
-    pred = X.skb.apply(Ridge(), y=y)
+    pred = X.skb.apply(Ridge(), y=y).skb.set_name('model')
     return {{"submission": rows[["id"]].assign(target=pred)}}
 '''
     record = submit(workspace, FinalBackend(source), task=task, max_repairs=0, notify=lambda *_: None)
@@ -231,7 +231,7 @@ def build():
     rows = skrub.eval_mode().skb.match({{"predict": predict_rows}}, default=fit_rows)
     y = rows["target"].skb.mark_as_y()
     X = rows.drop(columns=["target"], errors="ignore").skb.mark_as_X()
-    pred = X.skb.apply(Keyed(), y=y)
+    pred = X.skb.apply(Keyed(), y=y).skb.set_name('model')
     return {{"submission": pred[["id", "pred"]].rename(columns={{"pred": "target"}})}}
 '''
     record = submit(workspace, FinalBackend(source), task=task, max_repairs=0, notify=lambda *_: None)

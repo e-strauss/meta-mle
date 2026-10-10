@@ -45,7 +45,7 @@ def build():
 from sklearn.linear_model import Ridge
 def build():
     setup = build_evaluation()
-    pred = setup['X'].drop(columns=['bbl']).skb.apply(Ridge(), y=setup['y'])
+    pred = setup['X'].drop(columns=['bbl']).skb.apply(Ridge(), y=setup['y']).skb.set_name('model')
     return {'pred':pred, 'scoring':setup['scoring'], 'row_keys':setup['row_keys']}
 '''
     scored = run_plan(tmp_path/'candidate',candidate,{'sources': {'tmp': {'path': str(tmp_path)}}, 'kind':'pipeline','contract':contract,'folds_path':str(tmp_path/'setup'/'folds.npz'),'remaining_evaluations':1},60)
@@ -75,7 +75,7 @@ from sklearn.linear_model import Ridge
 def build():
     setup = build_evaluation()
     model = Ridge(alpha=skrub.choose_from([0.1, 1.0], name='alpha'))
-    return {'pred': setup['X'].skb.apply(model, y=setup['y']), 'scoring': setup['scoring']}
+    return {'pred': setup['X'].skb.apply(model, y=setup['y']).skb.set_name('model'), 'scoring': setup['scoring']}
 '''
     scored = run_plan(tmp_path / 'candidate', candidate,
                       {'sources': {'tmp': {'path': str(tmp_path)}}, 'kind': 'pipeline', 'contract': contract, 'folds_path': str(tmp_path / 'setup' / 'folds.npz'), 'remaining_evaluations': 2}, 60)
@@ -140,7 +140,7 @@ def build():
 from sklearn.linear_model import LogisticRegression
 def build():
     setup = build_evaluation()
-    pred = setup['X'][['t', 'a']].skb.apply(LogisticRegression(), y=setup['y'])
+    pred = setup['X'][['t', 'a']].skb.apply(LogisticRegression(), y=setup['y']).skb.set_name('model')
     return {'pred': pred, 'scoring': setup['scoring']}
 '''
     scored = run_plan(tmp_path / 'candidate', contract['setup_source'] + pipeline,
@@ -183,7 +183,7 @@ def build():
 from sklearn.linear_model import LogisticRegression
 def build():
     setup = build_evaluation()
-    pred = setup['X'][['t', 'a']].skb.apply(LogisticRegression(C={c}), y=setup['y'])
+    pred = setup['X'][['t', 'a']].skb.apply(LogisticRegression(C={c}), y=setup['y']).skb.set_name('model')
     return {{'pred': pred, 'scoring': setup['scoring'], 'row_keys': setup['row_keys']}}
 '''
     probed = run_plan(tmp_path / 'probe', contract['setup_source'] + body.format(c='1.0'),
@@ -225,7 +225,7 @@ def build():
 from sklearn.linear_model import LogisticRegression
 def build():
     setup = build_evaluation()
-    pred = setup['X'][['t', 'a']].skb.apply(LogisticRegression(C={c}), y=setup['y'])
+    pred = setup['X'][['t', 'a']].skb.apply(LogisticRegression(C={c}), y=setup['y']).skb.set_name('model')
     return {{'pred': pred, 'scoring': setup['scoring'], 'row_keys': setup['row_keys']}}
 '''
     request = {'sources': {'tmp': {'path': str(tmp_path)}}, 'contract': contract,
@@ -303,7 +303,7 @@ def build():
 from sklearn.tree import DecisionTreeClassifier
 def build():
     setup = build_evaluation()
-    return {'pred': setup['X'].skb.apply(DecisionTreeClassifier(random_state=0), y=setup['y']),
+    return {'pred': setup['X'].skb.apply(DecisionTreeClassifier(random_state=0), y=setup['y']).skb.set_name('model'),
             'scoring': setup['scoring']}
 '''
     probed = run_plan(tmp_path / 'probe', contract['setup_source'] + body,
@@ -355,7 +355,7 @@ def build():
     setup = build_evaluation()
     features = setup['X'].skb.apply(Center())
     model = skrub.choose_from({'weak': Wrapped(C=0.01), 'strong': Wrapped(C=10.0)}, name='model')
-    return {'pred': features.skb.apply(model, y=setup['y']), 'scoring': setup['scoring']}
+    return {'pred': features.skb.apply(model, y=setup['y']).skb.set_name('classifier'), 'scoring': setup['scoring']}
 '''
     result = run_plan(tmp_path / 'pipe', contract['setup_source'] + body,
                       {'sources': {'tmp': {'path': str(tmp_path)}}, 'kind': 'pipeline', 'contract': contract, 'remaining_evaluations': 4,
@@ -385,7 +385,7 @@ def build():
 from sklearn.linear_model import LogisticRegression
 def build():
     setup = build_evaluation()
-    return {'pred': setup['X'].skb.apply(LogisticRegression(max_iter=500), y=setup['y']),
+    return {'pred': setup['X'].skb.apply(LogisticRegression(max_iter=500), y=setup['y']).skb.set_name('model'),
             'scoring': setup['scoring']}
 '''
     probed = run_plan(tmp_path / 'probe', contract['setup_source'] + body,
