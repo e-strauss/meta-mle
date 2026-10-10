@@ -1,0 +1,143 @@
+# Proposed architecture, not current behavior.
+# Regenerate with: bash docs/diagrams/render.sh configurable-system
+vars: {
+  d2-config: {
+    layout-engine: tala
+    theme-id: 0
+    pad: 32
+  }
+}
+
+direction: down
+style.fill: "#ffffff"
+
+classes: {
+  step: {
+    style: {
+      border-radius: 6
+      font-size: 18
+      font-color: "#172033"
+    }
+  }
+  group: {
+    style: {
+      fill: "#f8fafc"
+      stroke: "#94a3b8"
+      border-radius: 8
+      font-size: 20
+    }
+  }
+  optional: {
+    style: {
+      fill: "#fef9c3"
+      stroke: "#a16207"
+      stroke-dash: 4
+      border-radius: 6
+      font-size: 18
+      font-color: "#172033"
+    }
+  }
+}
+
+configuration: "Run configuration — proposed" {
+  class: group
+  direction: down
+  presets: "Composable presets\nAIDE / MLE-STAR / MLEvolve\nMLZero / FM-inspired" {class: step}
+  data: "Data understanding: choose one mode\nStatic overview\nInitial perception\nAdaptive exploration" {class: step}
+  switches: "Independent switches\nProbe / planner / interpreter\nHistory memory / external knowledge" {class: step}
+  methodology: "Methodology prompts\nMatch enabled capabilities\nSkrub instructions stay fixed" {class: step}
+  style.fill: "#ecfeff"
+  style.stroke: "#0891b2"
+}
+
+controller: "Workflow controller\nLLM / automatic / staged\nEvaluation / analysis / expand / probe / stop\nEnabled actions only" {
+  class: step
+  style.fill: "#fee2e2"
+  style.stroke: "#dc2626"
+}
+
+search: "Search and experiment design" {
+  class: group
+  direction: right
+  policy: "Search / population policy\nGreedy / drafts / MCTS / MCGS\nIslands / diversity / migration" {
+    class: step
+    style.fill: "#ffedd5"
+    style.stroke: "#ea580c"
+  }
+  strategy: "Experiment strategy\nDraft / improve / ablate / refine\nCrossover / aggregate / ensemble\nTarget component and constraints" {class: step}
+  planner: "Planner (optional)\nHypothesis and changes" {class: optional}
+  policy -> strategy: parent and contributors
+  strategy -> planner: operation and scope
+}
+
+execution: "Shared Skrub execution — all generated plans" {
+  class: group
+  direction: right
+  writer: "Skrub writer — fixed\nSkrub authoring prompts + guide\nFine-grained DataOps pipelines" {
+    class: step
+    style.fill: "#cffafe"
+    style.stroke: "#0891b2"
+    style.stroke-width: 3
+  }
+  harness: "Harness\nValidate / execute / audit / score\nLocked folds for candidates and probes\nCharge every attempt to budgets" {class: step}
+  repairer: "Repairer — inner loop\nPreserve intent; bounded retries\nNo controller debug action" {class: step}
+  writer -> harness
+  harness -> repairer: implementation error
+  repairer -> harness: repaired source / retry
+}
+
+evaluation: "Evaluation contract\nSupplied or writer-authored setup\nLocked rows / labels / CV / scorer\nEDA not required" {class: step}
+
+results: "Results" {
+  class: group
+  direction: down
+  candidates: "Candidate archive\nSkrub source + scores\nPrimary lineage + contributors" {
+    class: step
+    style.fill: "#ede9fe"
+    style.stroke: "#7c3aed"
+  }
+  evidence: "Analysis / probe evidence\nObservations and fold diagnostics\nNo search reward" {
+    class: step
+    style.fill: "#dcfce7"
+    style.stroke: "#16a34a"
+  }
+  submission: "Submission\nRefit selected candidate\nUnscored" {class: step}
+}
+
+interpretation: "Interpreter (optional)\nScoped findings from analysis evidence" {class: optional}
+
+journal: "Durable journal\nCalls, plans, attempts, findings, scores\nCommitted workflow and search state\nRetain all candidate history" {
+  class: step
+  style.fill: "#dcfce7"
+  style.stroke: "#16a34a"
+}
+state: "Resumable workflow / search state\nRefinement rounds / stagnation\nPopulations / elites / migration\nRead-only selection; commit results" {class: step}
+
+context: "Context for every model role" {
+  class: group
+  direction: down
+  fixed: "Required context\nTask / source overview / contract\nBudget / hardware / selected inputs" {class: step}
+  memory: "History memory (optional)\nNone / window / full / AIDE\nExperiment and repair retrieval" {class: optional}
+  knowledge: "External knowledge (optional)\nLibrary / model knowledge\nWeb retrieval / local KB" {class: optional}
+}
+
+configuration -> controller: workflow and methodology
+configuration -> context: data mode and switches
+controller -> search.policy: expand
+controller -> execution.writer: evaluation / analysis / probe / final intent
+search.planner -> execution.writer: experiment intent
+search.strategy -> execution.writer: planner disabled {style.stroke-dash: 4}
+search.planner -> controller: request analysis / adaptive mode only {style.stroke-dash: 4}
+execution.harness -> evaluation: successful setup audit
+evaluation -> execution.harness: frozen contract for candidates / probes
+execution.harness -> results.candidates: scored variants
+execution.harness -> results.evidence: unscored analysis / probe output
+execution.harness -> results.submission: final refit
+results -> journal: outcomes / attempts / contract
+results.evidence -> interpretation -> journal: findings
+journal -> state: committed progress
+state -> search.policy: search state
+state -> controller: workflow stage
+journal -> context.memory: history
+context -> controller: role context
+context -> execution: context for writer and repairer

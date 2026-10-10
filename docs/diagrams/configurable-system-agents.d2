@@ -1,0 +1,34 @@
+# Proposed agent profiles, not exact reproductions of the original systems.
+# Inherit the same components, styles and connections as the unannotated diagram.
+# Regenerate with: bash docs/diagrams/render.sh configurable-system-agents
+...@configurable-system.d2
+
+configuration.label: "Proposed agent profiles — component annotations"
+configuration.presets.label: "Legend\nC = mle-claude; A = AIDE\nV = MLEvolve; S = MLE-STAR\nF = FM-Agent\n[ALL] = shared in our Skrub adaptations"
+configuration.data.label: "Data understanding\nC: adaptive exploration\nA, V, S, F: static overview by default\nInitial perception: available alternative\nNo dedicated EDA required for A, V, S, F"
+configuration.switches.label: "Independent switches\nC: EDA interpreter + probe\nV, S: separate planner\nV, S, F: external knowledge\nOther combinations remain configurable"
+configuration.methodology.label: "[ALL] Methodology prompts\nMatch each profile's capabilities\nShared Skrub instructions stay fixed"
+
+controller.label: "[ALL] Workflow control\nC: LLM chooses next action\nA: automatic draft / improve loop\nV: search and stagnation stages\nS: ablation / refinement / ensemble stages\nF: initialization / evolution / migration"
+
+search.policy.label: "[ALL] Candidate selection\nC: LLM parent choice\nA: drafts, then best valid solution\nV: progressive MCGS + references\nS: current solution / refinement winner\nF: diversity-aware island populations"
+search.strategy.label: "[ALL] Experiment strategy\nC: LLM-directed experiments / ablations\nA: draft / improve\nV: evolve / reference / aggregate\nS: ablate / target / refine / ensemble\nF: mutate / crossover / model fusion"
+search.planner.label: "Planner (optional separate call)\nV, S: explicit planning stage\nC, A: planning can stay within coding\nF: separate planning is configurable\nAll profiles pass experiment intent"
+
+execution.writer.label: "[ALL] Skrub writer — fixed\nShared authoring prompts + guide\nEvery profile writes DataOps pipelines"
+execution.harness.label: "[ALL] Harness\nValidate / execute / audit / score\nLocked folds; account for every attempt"
+execution.repairer.label: "[ALL] Repairer — inner loop\nPreserve intent; bounded retries\nAIDE debugging adapted to inner retries\nNo controller debug action"
+
+evaluation.label: "[ALL] Evaluation contract\nSupplied or writer-authored setup\nLocked rows / labels / CV / scorer\nEDA not required"
+results.candidates.label: "[ALL] Candidate archive\nSource + scores + lineage\nV, S, F: contributing solutions\nS: ablation variants are scored candidates"
+results.evidence.label: "C: EDA / probe evidence\nUnscored observations / OOF diagnostics\nA, V, S, F: not required by default\nS ablation scores stay in candidate archive"
+results.submission.label: "[ALL] Submission\nRefit selected candidate\nUnscored"
+
+interpretation.label: "C: Interpreter (optional)\nEDA outputs into scoped findings\nNot required by other default profiles\nTheir scored feedback informs search / memory"
+
+journal.label: "[ALL] Durable journal\nCalls / plans / attempts / outcomes\nRetain artifacts and candidate history"
+state.label: "[ALL] Resumable search progress\nC, A: candidate history\nV: graph statistics / stagnation\nS: target / refinement rounds\nF: populations / elites / migration\nRead-only selection; commit results"
+
+context.fixed.label: "[ALL] Required context\nTask / source overview / contract\nBudget / hardware / selected inputs"
+context.memory.label: "[ALL] History / context function\nC: continuous-context approximation\nA: solution summaries\nV: retrospective experience retrieval\nS: refinement / ensemble history\nF: population / elite context"
+context.knowledge.label: "V, S, F: External knowledge\nV: cold-start model knowledge\nS: web-retrieved models / code\nF: RAG expert knowledge\nC, A: not required by default"
