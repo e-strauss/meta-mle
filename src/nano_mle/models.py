@@ -90,7 +90,7 @@ class Finding(Model):
 class Budget(Model):
     max_actions: int = Field(default=30, ge=1)
     max_expansions: int = Field(default=6, ge=1)
-    max_explorations: int = Field(default=8, ge=1)
+    max_explorations: int = Field(default=8, ge=0)  # 0: no explorations; evaluation locks without one
     max_evaluation_setups: int = Field(default=3, ge=1)
     max_requested_explorations: int = Field(default=2, ge=0)
     max_evaluations: int = Field(default=24, ge=1)

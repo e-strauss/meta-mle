@@ -4,7 +4,7 @@ nano-mle becomes a meta-harness: each MLE agent is a **profile**, a composition 
 shared components, instead of a custom harness. Agents are reproduced in their
 core ideas, adapted to Skrub plans; deviations are documented per profile.
 
-Status: Phase 0 done (2026-10-10). Work across several sessions; tick phases off here.
+Status: Phases 0 and 1 done (2026-10-10). Work across several sessions; tick phases off here.
 
 ## Fixed (never per profile)
 
@@ -83,10 +83,15 @@ anyway. May return later as a probe-style diagnostic only.
 - [x] Tests: existing suite green; `tests/test_operators.py`.
 
 ### Phase 1: switches and data modes
-- [ ] Planner off: operation direction goes straight to the writer.
-- [ ] Interpreter off; explorations/probes off via budgets (already partly).
-- [ ] `static-overview`: harness-computed per-source schema, dtypes, nulls, head;
-      no LLM. Setup-only start: lock evaluation without exploring.
+- [x] Planner off: operation direction goes straight to the writer.
+- [x] Interpreter off; explorations off with `--max-explorations 0` (probes: 0).
+- [x] `--data-overview`: harness-computed per-source summary, no LLM. Lock
+      evaluation without exploring when explorations are off.
+- [x] Controller sees `allowed_actions`; an unavailable action is asked again once.
+- [ ] Open (Phase 2/3): the prompt sets still ask for explorations (population
+      check, learning curve) before the lock. Profiles without explorations need a
+      prompt set whose conventions match: the population check and pool sizing
+      move into the setup's `audit` outputs, or are dropped.
 
 ### Phase 2: MLEvolve profile
 - [ ] Replace `mcgs` with progressive MCGS: UCT + elite schedule + stagnation

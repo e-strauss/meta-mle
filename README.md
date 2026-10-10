@@ -124,6 +124,20 @@ actions and permits the planner to request explorations inside an expansion.
 Without a profile, that exploration limit defaults to 2, including with `auto`.
 Other budgets retain their existing defaults and CLI controls.
 
+Optional components are switched at `init` and recorded in the workspace
+(`switches`); profiles may set them:
+
+| Switch | Default | Off / on |
+|---|---|---|
+| `--planner` / `--no-planner` | on | Off: no planner call; the writer implements the operator's instruction and the controller's direction directly. |
+| `--interpreter` / `--no-interpreter` | on | Off: explorations keep their outputs (memories show previews) but produce no findings. |
+| `--data-overview` | off | On: at the first run start the harness summarises every source without model calls (schema, missing fractions, unique counts, numeric ranges and a head from the first 10,000 rows; row counts for Parquet; file counts for directories) and every role sees it as `data_overview`. |
+| `--max-explorations 0` | 8 | No explorations; evaluation is locked without one. |
+
+The controller sees `allowed_actions`, the actions the budgets and the lock permit.
+An answer outside them is asked again once with the error (`previous_answer_error`),
+like an answer that does not parse; a second one is rejected and counts as an action.
+
 Set parameters in TOML, such as `[policy.draft-greedy] num_drafts = 5`,
 `[policy.mcts] exploration = 1.414`, `[policy.mcgs] seed = 42`, and
 `[memory.aide] explorations = 4`. The workspace records the resolved component
@@ -305,7 +319,7 @@ A single loop dispatches one controller decision at a time:
 | Action | What happens | Scored? |
 |---|---|---|
 | `explore` | The writer produces a graph answering a concrete question; outputs are evaluated and an interpreter turns them into scoped findings. It may fit models for quick evidence, but never produces candidates. | No |
-| `establish_evaluation` | The writer constructs the modelling population, raw labels, CV and scorer. The harness audits and locks them. | No |
+| `establish_evaluation` | The writer constructs the modelling population, raw labels, CV and scorer. The harness audits and locks them. Needs a successful exploration unless explorations are off. | No |
 | `expand` | An [operator](#operators) names the kind of experiment. The search policy selects a parent (peeked before the controller call, so the controller's reason is written for it); the planner proposes a bounded change (or requests an exploration first); the writer implements it; every grid variant is scored and becomes its own candidate (`<expansion>_variant_N`, shown as v1, v2, …), which later expansions can select as a parent with its grid values resolved. | Yes |
 | `probe` | Reports, for an existing candidate, the out-of-fold predictions kept when it was scored (fitting it again only if none were kept), or fits a pipeline the writer builds on the locked folds; reports its fold scores and a harness-computed error summary of its out-of-fold predictions. | No |
 | `stop` | Ends the run. | |
@@ -620,6 +634,7 @@ still shows which phase was running.
 | `controllers.py` | LLM and automatic next-action strategies. |
 | `operators.py` | Experiment operators: instruction, parent rule, selectability, workflow-state update. |
 | `profiles.py` | Agent profiles: named default component choices. |
+| `overview.py` | Static data overview of the task sources, computed by the harness. |
 | `memory.py` | Memory protocol, read-only journal view, `window` and `full` memories. |
 | `agents.py` | DSPy backend: controller, planner, writer, repairer and interpreter signatures. |
 | `prompts.py` | Prompt sets: named fragments assembled into the controller, planner, writer and repairer instructions; registry of variants. |

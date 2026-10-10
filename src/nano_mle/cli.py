@@ -10,9 +10,11 @@ from .profiles import PROFILES
 def resolve_settings(args):
     """Existing defaults, then the profile, then explicitly supplied init flags."""
     from .models import Budget
+    from .runner import SWITCHES
 
     defaults = {"controller": "llm", "policy": "greedy", "memory": "window", "prompts": "default",
-                "max_requested_explorations": Budget.model_fields["max_requested_explorations"].default}
+                "max_requested_explorations": Budget.model_fields["max_requested_explorations"].default,
+                "max_explorations": Budget.model_fields["max_explorations"].default, **SWITCHES}
     defaults.update(PROFILES.get(args.profile, {}))
     return {key: getattr(args, key) if getattr(args, key) is not None else value
             for key, value in defaults.items()}
@@ -54,7 +56,14 @@ def main():
     init.add_argument("--prompts", help="Prompt set of controller, planner and writer (default: default); "
                       "parameters in nano-mle.toml [prompts.<name>]")
     init.add_argument("--max-expansions", type=int, default=6)
-    init.add_argument("--max-explorations", type=int, default=8)
+    init.add_argument("--max-explorations", type=int, help="Explorations (default: 8); 0 turns them off "
+                      "and evaluation is locked without one")
+    init.add_argument("--planner", action=argparse.BooleanOptionalAction,
+                      help="Separate planner call (default: on); off, the writer implements the direction directly")
+    init.add_argument("--interpreter", action=argparse.BooleanOptionalAction,
+                      help="Findings from exploration outputs (default: on)")
+    init.add_argument("--data-overview", action=argparse.BooleanOptionalAction,
+                      help="Harness-computed summary of every source in every context (default: off)")
     init.add_argument("--max-requested-explorations", type=int,
                       help="Planner explorations per expansion (default: 2; aide preset: 0)")
     init.add_argument("--max-evaluations", type=int, default=24)
@@ -96,7 +105,7 @@ def main():
         from .runner import initialize
 
         settings = resolve_settings(args)
-        budget = Budget(max_expansions=args.max_expansions, max_explorations=args.max_explorations,
+        budget = Budget(max_expansions=args.max_expansions, max_explorations=settings["max_explorations"],
                         max_evaluations=args.max_evaluations, max_actions=args.max_actions,
                         max_evaluation_setups=args.max_evaluation_setups,
                         max_requested_explorations=settings["max_requested_explorations"],
@@ -104,7 +113,8 @@ def main():
                         execution_timeout=args.execution_timeout,
                         max_model_calls=args.max_model_calls, max_wall_seconds=args.time_budget)
         initialize(args.workspace.resolve(), load_task(args.task), budget, settings["policy"],
-                   settings["memory"], settings["controller"], settings["prompts"], args.profile)
+                   settings["memory"], settings["controller"], settings["prompts"], args.profile,
+                   {name: settings[name] for name in ("planner", "interpreter", "data_overview")})
         print(f"Initialized {args.workspace.resolve()}")
     elif args.command == "run":
         from .agents import DSPyBackend

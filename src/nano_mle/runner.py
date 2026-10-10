@@ -12,8 +12,9 @@ from .config import hardware, load_config
 from .controllers import controller
 from .contracts import create_contract, digest, source_manifest, verify_contract
 from .execution import run_plan
-from .models import Budget, Task
+from .models import Budget, Proposal, Task
 from .operators import operator
+from .overview import data_overview
 from .libraries import record_missing
 from .memory import Journal, memory
 from .prompts import chosen_prompts, digests, prompts
@@ -27,8 +28,18 @@ class ModelCallBudgetExceeded(RuntimeError):
     pass
 
 
+class UnavailableAction(ValueError):
+    """The controller chose an action the budgets, the lock or the profile do not permit."""
+
+
+# Optional components: the planner (off: the operator's instruction and the
+# controller's direction go to the writer directly), the interpreter (off:
+# explorations leave outputs but no findings) and the static data overview.
+SWITCHES = {"planner": True, "interpreter": True, "data_overview": False}
+
+
 def initialize(workspace: Path, task: Task, budget: Budget, search_policy="greedy", memory_name="window",
-               controller_name="llm", prompts_name="default", profile=None):
+               controller_name="llm", prompts_name="default", profile=None, switches=None):
     manifest = source_manifest(task)
     config = load_config()
     params = config["memory"].get(memory_name, {})
@@ -39,6 +50,10 @@ def initialize(workspace: Path, task: Task, budget: Budget, search_policy="greed
     controller(controller_name, controller_params)
     prompt_params = config["prompts"].get(prompts_name, {})
     prompts(prompts_name, prompt_params)
+    unknown = set(switches or {}) - set(SWITCHES)
+    if unknown:
+        raise ValueError(f"Unknown switches {sorted(unknown)}; switches are {sorted(SWITCHES)}")
+    switches = {**SWITCHES, **(switches or {})}
     workspace.mkdir(parents=True, exist_ok=False)
     (workspace / "artifacts").mkdir()
     store = Store(workspace)
@@ -58,8 +73,9 @@ def initialize(workspace: Path, task: Task, budget: Budget, search_policy="greed
         store.set_meta("workflow_state", {})
         # The profile only chose defaults; the components above are what the run uses.
         store.set_meta("profile", profile)
+        store.set_meta("switches", switches)
         store.event("initialized", policy=search_policy, memory=memory_name, controller=controller_name,
-                    prompts=prompts_name, profile=profile)
+                    prompts=prompts_name, profile=profile, switches=switches)
         export_workspace(store)
     finally:
         store.close()
@@ -140,6 +156,7 @@ class Runner:
                                      self.store.meta("controller_params", {}))
         chosen = self.store.meta("memory", {"name": "window", "params": {}})  # workspaces before memories
         self.memory = memory(chosen["name"], chosen["params"])
+        self.switches = {**SWITCHES, **self.store.meta("switches", {})}
         self.prompts = chosen_prompts(self.store)
         if hasattr(self.backend, "use_prompts"):
             self.backend.use_prompts(self.prompts)
@@ -191,6 +208,8 @@ class Runner:
                    "remaining_evaluations": self.budget.max_evaluations - self.counts()["evaluations"],
                    "requested_explorations": requested, "parent": None, "time": self.time_context(),
                    "hardware": hardware()}
+        if self.switches["data_overview"]:
+            context["data_overview"] = self.store.meta("data_overview")
         context.update(self.memory.view(role, Journal(self.store), query,
                                         selection.parent_id if selection else None))
         if selection:
@@ -208,7 +227,9 @@ class Runner:
             raise ValueError("Historical candidate source was modified")
         return {**candidate, "resolved_source": resolve_source(path.read_text(), candidate["configuration"])}
 
-    def call(self, method, retry=False, **kwargs):
+    def call(self, method, retry=False, validate=None, **kwargs):
+        """validate(result) raises ValueError for an answer that parses but cannot be
+        used now; it is handled like a malformed answer."""
         if self.counts()["model_calls"] >= self.budget.max_model_calls:
             raise ModelCallBudgetExceeded("Model-call budget exhausted")
         call_id = new_id("call")
@@ -222,6 +243,8 @@ class Runner:
             self.backend.usage = None
         try:
             result = getattr(self.backend, method)(**kwargs)
+            if validate:
+                validate(result)
         except Exception as error:
             # A malformed structured answer (e.g. a probe without a question) must not end
             # the run: record it and ask again once, showing the model its own error.
@@ -232,11 +255,11 @@ class Runner:
             if retry:
                 raise
             if isinstance(error, ModelUnavailable):  # no answer to show the model; ask again as is
-                return self.call(method, retry=True, **kwargs)
+                return self.call(method, retry=True, validate=validate, **kwargs)
             if not isinstance(kwargs.get("context"), dict):
                 raise
             context = {**kwargs["context"], "previous_answer_error": " ".join(str(error).split())[-2000:]}
-            return self.call(method, retry=True, **{**kwargs, "context": context})
+            return self.call(method, retry=True, validate=validate, **{**kwargs, "context": context})
         encoded = (result.model_dump() if hasattr(result, "model_dump") else
                    [f.model_dump() for f in result] if isinstance(result, list) else result)
         (directory / f"{call_id}.output.json").write_text(json.dumps(encoded, indent=2))
@@ -339,7 +362,7 @@ class Runner:
                                        {"question": question, "stopping_condition": stopping_condition})
         record.update(status=result["status"], result=result, artifact_path=attempt["path"])
         self.store.put("exploration", record)
-        if result["status"] == "ok":
+        if result["status"] == "ok" and self.switches["interpreter"]:
             findings = self.call("interpret", question=question, result=result,
                                  context=self.context("interpret", query=question, **scope))
             existing = {f["id"] for f in self.store.records("finding")}
@@ -392,7 +415,7 @@ class Runner:
     def establish(self, spec):
         if self.store.meta("contract") is not None:
             raise ValueError("Evaluation is already locked; use a new workspace to change it")
-        if not any(e["status"] == "ok" for e in self.store.records("exploration")):
+        if self.budget.max_explorations and not any(e["status"] == "ok" for e in self.store.records("exploration")):
             raise ValueError("Successful exploration is required before locking evaluation")
         if self.counts()["evaluation_setups"] >= self.budget.max_evaluation_setups:
             raise ValueError("Evaluation setup budget exhausted")
@@ -440,6 +463,27 @@ class Runner:
                 "configuration": parent.get("configuration_description"),
                 "description": parent.get("description"), "reference_ids": selection.reference_ids}
 
+    def plan(self, record, selection, extra, direction):
+        """The planner's experiment, after the explorations it requests; None when it
+        exceeds the requested-exploration limit (the expansion is then failed)."""
+        requested = 0
+        while True:
+            # The controller's reason for expanding is the requested direction; the
+            # planner grounds the concrete experiment in it and the selected parent.
+            scope = {"selection": selection, "requested": requested, "extra": extra}
+            context = self.context("plan", query=direction, **scope)
+            proposal = self.call("plan", context=context)
+            if proposal.action == "experiment":
+                return proposal, scope, context
+            if requested >= self.budget.max_requested_explorations:
+                record.update(status="failed", error="Planner exceeded requested exploration limit")
+                self.store.put("expansion", record)
+                return None
+            record["exploration_ids"].append(self.explore(proposal.question, proposal.stopping_condition,
+                                                         record["id"], scope))
+            self.store.put("expansion", record)
+            requested += 1
+
     def expand(self, direction=None, operator_name=None):
         contract = self.store.meta("contract")
         if contract is None:
@@ -462,29 +506,24 @@ class Runner:
         extra = {"controller_direction": direction, **op.extra_context(Journal(self.store), selection, state)}
         if op.instruction:
             extra["operator"] = {"name": op.name, "instruction": op.instruction}
-        requested = 0
-        while True:
-            # The controller's reason for expanding is the requested direction; the
-            # planner grounds the concrete experiment in it and the selected parent.
-            scope = {"selection": selection, "requested": requested, "extra": extra}
-            context = self.context("plan", query=direction, **scope)
-            proposal = self.call("plan", context=context)
-            if proposal.action == "experiment":
-                break
-            if requested >= self.budget.max_requested_explorations:
-                record.update(status="failed", error="Planner exceeded requested exploration limit")
-                self.store.put("expansion", record)
+        if self.switches["planner"]:
+            planned = self.plan(record, selection, extra, direction)
+            if planned is None:
                 return
-            record["exploration_ids"].append(self.explore(proposal.question, proposal.stopping_condition,
-                                                         record["id"], scope))
-            self.store.put("expansion", record)
-            requested += 1
+            proposal, scope, context = planned
+        else:
+            # No planner: the writer implements the operator's instruction and the
+            # controller's direction as they are.
+            scope = {"selection": selection, "requested": 0, "extra": extra}
+            context = self.context("implement", query=direction, **scope)
+            proposal = Proposal(action="experiment", description=" ".join(
+                part for part in (op.instruction, direction) if part) or "Next experiment")
         # Candidates the planner builds on become references, so the writer sees their code.
         scored = {c["id"] for c in self.store.records("candidate") if c.get("status") == "ok"}
         reused = [i for i in proposal.reference_ids
                   if i in scored and i != selection.parent_id and i not in selection.reference_ids]
         if reused:
-            selection = Selection(selection.parent_id, selection.reference_ids + reused)
+            selection = Selection(selection.parent_id, selection.reference_ids + reused, selection.contributor_ids)
             scope = {**scope, "selection": selection}
             record["reference_ids"] = selection.reference_ids
         record.update(proposal=proposal.model_dump(), finding_ids=[f["id"] for f in context.get("findings", [])
@@ -547,6 +586,17 @@ class Runner:
                     record.update(status="failed", error=error)
                     self.store.put(kind, record)
 
+    def allowed_actions(self):
+        """The controller actions the budgets, the evaluation lock and the profile permit."""
+        counts, budget = self.counts(), self.budget
+        locked = self.store.meta("contract") is not None
+        allowed = {"explore": counts["explorations"] < budget.max_explorations,
+                   "establish_evaluation": not locked and counts["evaluation_setups"] < budget.max_evaluation_setups,
+                   "expand": locked and counts["expansions"] < budget.max_expansions,
+                   "probe": locked and counts["probes"] < budget.max_probes,
+                   "stop": True}
+        return [action for action, ok in allowed.items() if ok]
+
     def search(self):
         while self.counts()["actions"] < self.budget.max_actions:
             if self.counts()["evaluations"] >= self.budget.max_evaluations:
@@ -557,9 +607,20 @@ class Runner:
                 self.store.event("stopped", reason="Time budget exhausted")
                 return
             self.store.set_meta("actions", self.counts()["actions"] + 1)
-            decision = self.controller.decide(self.context(
-                "control", extra={"next_expansion_parent": self.next_parent_context()}), self.call,
-                Journal(self.store))
+            allowed = self.allowed_actions()
+
+            def check(decision):
+                if decision.action not in allowed:
+                    raise UnavailableAction(f"Action {decision.action!r} is not available now; choose one of {allowed}")
+
+            try:
+                decision = self.controller.decide(self.context(
+                    "control", extra={"next_expansion_parent": self.next_parent_context(), "allowed_actions": allowed}),
+                    lambda method, **kwargs: self.call(method, validate=check, **kwargs), Journal(self.store))
+            except UnavailableAction as error:  # asked twice, still not an available action
+                self.store.event("action_rejected", error=str(error))
+                self.notify(f"Action rejected: {error}")
+                continue
             self.store.event("controller_decision", **decision.model_dump())
             if decision.action == "stop":
                 self.store.event("stopped", reason=decision.reason)
@@ -621,6 +682,9 @@ class Runner:
                     self.store.set_meta("prompt_texts", texts)
                     self.store.event("run_started", model=model, config=load_config(),
                                      prompts={"name": self.prompts.name, "sha256": digests(texts)})
+                    if self.switches["data_overview"] and self.store.meta("data_overview") is None:
+                        self.notify("Summarise the task sources")
+                        self.store.set_meta("data_overview", data_overview(self.store.meta("sources")))
                     self.store.set_meta("state", "running")
                     self.tick()  # time while the run was stopped does not count
                     try:
