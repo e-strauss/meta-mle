@@ -254,6 +254,44 @@ def test_probe_reports_evidence_but_its_files_are_not_inputs(workspace):
     assert len(store.records("candidate")) == 1  # probes create no candidates
 
 
+
+class ProbeOnceBackend(ProbeBackend):
+    """Probe the candidate, then probe a failing new pipeline, then stop."""
+
+    def control(self, context):
+        from nano_mle.models import Decision
+
+        self.controls = getattr(self, "controls", []) + [context]
+        if context["counts"]["probes"] == 1:
+            return Decision(action="probe", reason="Check a new pipeline", question="Does it fail?")
+        if context["counts"]["probes"] == 2:
+            return Decision(action="stop", reason="Done")
+        return super().control(context)
+
+    def implement(self, kind, context, intent):
+        if kind == "probe":
+            return "def build():\n    raise ValueError('no such column')\n"
+        return super().implement(kind, context, intent)
+
+
+def test_a_candidate_probe_reuses_the_predictions_kept_at_scoring(workspace, tmp_path, monkeypatch):
+    config = tmp_path / "sequential.toml"
+    config.write_text("[execution]\ncpu_threads = 2\ngrid_n_jobs = 1\n")
+    monkeypatch.setenv("NANO_MLE_CONFIG", str(config))
+    backend = ProbeOnceBackend(workspace)
+    Runner(workspace, backend).run()
+    store = Store(workspace)
+    reused, failed = store.records("probe")
+    candidate = store.records("candidate")[0]
+    assert reused["status"] == "ok" and reused["result"]["reused"] and reused["attempt_ids"] == []
+    info = reused["result"]["probe"]
+    assert sorted(pd.read_parquet(info["path"])["row"]) == list(range(18))
+    assert info["fold_scores"] == candidate["fold_scores"]
+    # The controller sees the failed probe and its error before choosing again.
+    assert failed["status"] == "failed"
+    shown = backend.controls[-1]["failed_probes"]
+    assert [p["id"] for p in shown] == [failed["id"]] and "no such column" in shown[0]["error"]
+
 class DirectionBackend(ScriptedBackend):
     """Records what the planner is told about the controller's reason to expand."""
 

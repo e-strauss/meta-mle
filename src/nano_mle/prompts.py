@@ -46,7 +46,10 @@ it is only as good as the evaluation setup is representative.
   small observable difference. A difference in how inputs were recorded (format,
   scale, resolution, device) that preprocessing can remove calls for normalising the
   inputs, not for dropping rows. A population must keep enough rows to train the
-  models you intend to use: weigh a lower AUC against the training rows it costs.
+  models you intend to use: weigh a lower AUC against the training rows it costs. A
+  rule that removes most rows of a label value, or a large share of all rows, needs
+  evidence that it improves the score on the prediction-like rows, not only a lower
+  AUC.
   The evaluation setup reports the AUC and row count of every compared population.
 """,
         "training_pool": """- Training pool. The locked rows are the training rows as well as the test folds,
@@ -73,9 +76,11 @@ it is only as good as the evaluation setup is representative.
   context.hardware lists one). Prefer weights learned from data over hand-set weights
   swept in grids. When two expansions in a row move the score by less than the fold
   noise, the family has plateaued: switch to a different family, a metric-aligned
-  objective, a new signal source or an ensemble of families, not another sweep. A
-  pretrained model used as a frozen feature extractor and the same model fine-tuned
-  end to end are different families. A plateau is not a reason to stop.
+  objective, a new signal source, more capacity or training (a larger model, higher
+  input resolution, longer training) or an ensemble of families, not another sweep
+  or a small adjustment of the same model. A pretrained model used as a frozen
+  feature extractor and the same model fine-tuned end to end are different
+  families. A plateau is not a reason to stop.
 """,
         "objective": """- Training objective. A model is only as good as the metric its loss rewards. Work
   out what the task's metric rewards (an ordering, calibrated probabilities, a
@@ -146,7 +151,8 @@ it is only as good as the evaluation setup is representative.
         "model_families": """- Model families. Candidates should cover several model families, at least one
   learned from the rows, before one is tuned. When two expansions in a row move the
   score by less than the fold noise, ask for a different direction (another family,
-  objective or signal), not another sweep. A pretrained model kept frozen and the
+  objective, signal, more capacity or training, or an ensemble), not another sweep or
+  small adjustment. A pretrained model kept frozen and the
   same model fine-tuned count as different families. A plateau is not a reason to
   stop.
 """,
@@ -180,9 +186,12 @@ A question about a model that can be answered by a pipeline under the locked
 evaluation (a feature block, an estimator, hyperparameters) is an experiment:
 expand, so the answer is scored and becomes a candidate. Explore models only for
 quick evidence the lock cannot give.
-Once candidates exist, a probe fits a candidate (candidate_id) or a new
-single-configuration pipeline on the locked folds and reports its fold scores, a
-harness-computed error summary of its out-of-fold predictions and a preview.
+Once candidates exist, a probe reports the fold scores, a harness-computed error
+summary of out-of-fold predictions and a preview: for a candidate (candidate_id)
+from the predictions kept when it was scored, without fitting again; for a new
+single-configuration pipeline by fitting it on the locked folds. Failed explorations
+and probes are listed with their errors: ask again only with a change that avoids
+the error, not the same question.
 Exploration and probes produce evidence, not search reward. Stay within the budgets.
 context.time shows the elapsed and remaining run time and the typical attempt
 durations in this run: choose actions that fit in the remaining time. Stop only when

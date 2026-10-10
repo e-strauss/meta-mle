@@ -18,7 +18,7 @@ boundary checkable.
 
 ```bash
 uv sync
-uv run pytest -n 8 # offline test suite, 8 processes (each gets its own CPU slice)
+uv run pytest       # offline test suite, 8 processes by default (each gets its own CPU slice)
 ```
 
 ## Running a task
@@ -305,7 +305,7 @@ A single loop dispatches one controller decision at a time:
 | `explore` | The writer produces a graph answering a concrete question; outputs are evaluated and an interpreter turns them into scoped findings. It may fit models for quick evidence, but never produces candidates. | No |
 | `establish_evaluation` | The writer constructs the modelling population, raw labels, CV and scorer. The harness audits and locks them. | No |
 | `expand` | The search policy selects a parent (peeked before the controller call, so the controller's reason is written for it); the planner proposes a bounded change (or requests an exploration first); the writer implements it; every grid variant is scored and becomes its own candidate (`<expansion>_variant_N`, shown as v1, v2, …), which later expansions can select as a parent with its grid values resolved. | Yes |
-| `probe` | Fits one configuration (an existing candidate, or a pipeline the writer builds) on the locked folds and reports its fold scores and a harness-computed error summary of its out-of-fold predictions. | No |
+| `probe` | Reports, for an existing candidate, the out-of-fold predictions kept when it was scored (fitting it again only if none were kept), or fits a pipeline the writer builds on the locked folds; reports its fold scores and a harness-computed error summary of its out-of-fold predictions. | No |
 | `stop` | Ends the run. | |
 
 Who decides what, compared with a single-agent harness such as mle-claude:
@@ -441,8 +441,12 @@ def build():
     return {"X": X, "y": y, "scoring": "neg_root_mean_squared_error"}
 ```
 
-**Pipelines** receive the locked setup as source code defining `build_evaluation()`,
-call it, and build features and models downstream. A named `skrub.choose_from` grid
+**Pipelines** receive the locked setup as source code defining `build_evaluation()`.
+The harness runs it before the plan in the same module, so a pipeline calls it and
+uses the setup's imports, constants and functions without pasting them (writers
+copying the setup used to corrupt it), and builds features and models downstream.
+Final plans are self-contained: their writer gets the setup and the candidate as one
+program. A named `skrub.choose_from` grid
 becomes one candidate per variant:
 
 ```python
@@ -467,7 +471,12 @@ harness wraps the locked scorer to capture each test fold's predictions during t
 normal fold loop, so nothing is fitted twice, and writes `oof_predictions.parquet`
 with `row` (position in the locked X), `fold`, `y`, `prediction` (positive-class
 probability, or the predicted label plus one `proba_<class>` column per class) and
-`row_key`. The file is for people and the dashboard. The model sees the fold scores,
+`row_key` (one `row_key_<column>` per column for multi-column keys). Every
+candidate keeps the same file per variant (`oof_predictions_<variant>.parquet`)
+when its folds are scored sequentially (`grid_n_jobs = 1`), so a probe of a
+candidate reuses it instead of fitting again; only a probe of a new pipeline fits.
+Failed probes reach the controller with their error (`failed_probes`), so it does
+not ask the same probe again. The file is for people and the dashboard. The model sees the fold scores,
 a preview and an error summary computed by the harness: per-class recall, precision
 and confusion for classification, calibration by prediction decile for binary
 probabilities, error quantiles for regression.

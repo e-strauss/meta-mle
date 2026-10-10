@@ -147,6 +147,11 @@ def build():
                       {'sources': {'tmp': {'path': str(tmp_path)}}, 'kind': 'pipeline', 'contract': contract, 'folds_path': str(tmp_path / 'setup' / 'folds.npz'), 'remaining_evaluations': 1}, 60)
     assert scored['status'] == 'ok', scored
     assert 0 <= scored['variants'][0]['score'] <= 1
+    # Run by the harness before the plan instead of pasted, the scorer is locked alike.
+    prelude = run_plan(tmp_path / 'prelude', pipeline,
+                       {'sources': {'tmp': {'path': str(tmp_path)}}, 'kind': 'pipeline', 'contract': contract, 'setup_source': contract['setup_source'], 'folds_path': str(tmp_path / 'setup' / 'folds.npz'), 'remaining_evaluations': 1}, 60)
+    assert prelude['status'] == 'ok', prelude
+    assert prelude['variants'][0]['score'] == scored['variants'][0]['score']
     drifted = contract['setup_source'].replace('K = 2', 'K = 3') + pipeline
     rejected = run_plan(tmp_path / 'drift', drifted,
                         {'sources': {'tmp': {'path': str(tmp_path)}}, 'kind': 'pipeline', 'contract': contract, 'folds_path': str(tmp_path / 'setup' / 'folds.npz'), 'remaining_evaluations': 1}, 60)
@@ -193,6 +198,58 @@ def build():
     grid = run_plan(tmp_path / 'grid', contract['setup_source'] + body.format(c="skrub.choose_from([0.1, 1.0], name='C')"),
                     {'sources': {'tmp': {'path': str(tmp_path)}}, 'kind': 'probe', 'contract': contract, 'folds_path': str(tmp_path / 'setup' / 'folds.npz')}, 60)
     assert grid['status'] == 'failed' and 'single value' in grid['error']
+
+
+def test_pipelines_run_after_the_locked_setup_and_keep_their_predictions(tmp_path, monkeypatch):
+    data = tmp_path / 'pairs.csv'
+    rows = [{'g': g, 't': t, 'a': (g * 7 + t * 3) % 5, 'target': int((g + t) % 3 == 0)}
+            for g in range(24) for t in range(5)]
+    pd.DataFrame(rows).to_csv(data, index=False)
+    # Two-column row keys, as a setup that keys rows by entity and time declares them.
+    source = f'''import pandas as pd
+import skrub
+from sklearn.model_selection import GroupKFold
+
+def build():
+    data = skrub.as_data_op({str(data)!r}).skb.apply_func(pd.read_csv)
+    X = data[['g', 't', 'a']].skb.mark_as_X(cv=GroupKFold(3), split_kwargs={{'groups': data['g']}})
+    y = data['target'].skb.mark_as_y()
+    return {{'X': X, 'y': y, 'scoring': 'roc_auc', 'row_keys': data[['g', 't']]}}
+'''
+    setup = run_plan(tmp_path / 'setup', source, {'sources': {'tmp': {'path': str(tmp_path)}}, 'kind': 'evaluation'}, 60)
+    assert setup['status'] == 'ok', setup
+    contract = create_contract(setup['snapshot'], evaluation_source(source),
+                               EvaluationSpec(scoring='roc_auc', rationale='grouped'))
+    # The plan does not paste the setup: the harness runs it first.
+    body = '''
+from sklearn.linear_model import LogisticRegression
+def build():
+    setup = build_evaluation()
+    pred = setup['X'][['t', 'a']].skb.apply(LogisticRegression(C={c}), y=setup['y'])
+    return {{'pred': pred, 'scoring': setup['scoring'], 'row_keys': setup['row_keys']}}
+'''
+    request = {'sources': {'tmp': {'path': str(tmp_path)}}, 'contract': contract,
+               'setup_source': contract['setup_source'], 'folds_path': str(tmp_path / 'setup' / 'folds.npz')}
+    probed = run_plan(tmp_path / 'probe', body.format(c='1.0'), {**request, 'kind': 'probe'}, 60)
+    assert probed['status'] == 'ok', probed
+    oof = pd.read_parquet(probed['probe']['path'])
+    assert list(oof.columns) == ['row', 'row_key_g', 'row_key_t', 'fold', 'y', 'prediction']
+    assert oof.loc[oof['row'] == 7, ['row_key_g', 'row_key_t']].values.tolist() == [[1, 2]]
+    grid = body.format(c="skrub.choose_from([0.1, 1.0], name='C')")
+    parallel = run_plan(tmp_path / 'parallel', grid, {**request, 'kind': 'pipeline', 'remaining_evaluations': 2}, 60)
+    # Folds scored in parallel arrive in no fixed order, so no predictions are kept.
+    assert parallel['status'] == 'ok' and all('oof_file' not in v for v in parallel['variants'])
+    config = tmp_path / 'sequential.toml'
+    config.write_text('[execution]\ncpu_threads = 2\ngrid_n_jobs = 1\n')
+    monkeypatch.setenv('NANO_MLE_CONFIG', str(config))
+    scored = run_plan(tmp_path / 'candidate', grid, {**request, 'kind': 'pipeline', 'remaining_evaluations': 2}, 60)
+    assert scored['status'] == 'ok', scored
+    for variant in scored['variants']:
+        kept = pd.read_parquet(tmp_path / 'candidate' / variant['oof_file'])
+        assert sorted(kept['row']) == list(range(120))
+    # The second variant (C=1.0) is the probed configuration: same predictions.
+    kept = pd.read_parquet(tmp_path / 'candidate' / scored['variants'][1]['oof_file'])
+    assert kept['prediction'].tolist() == oof['prediction'].tolist()
 
 
 def test_contract_references_folds_instead_of_inlining_them(tmp_path):

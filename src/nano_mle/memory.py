@@ -61,6 +61,14 @@ def probe_outputs(journal):
             for r in journal.records("probe") if r.get("status") == "ok"]
 
 
+def failed_probes(journal):
+    """Failed probes with their last error, so a probe is not asked again unchanged."""
+    return [{"id": r["id"], "question": r["question"], "candidate_id": r.get("candidate_id"),
+             "attempts": len(r.get("attempt_ids", [])),
+             "error": " ".join(str((r.get("result") or {}).get("error", "")).split())[:500]}
+            for r in journal.records("probe") if r.get("status") == "failed"]
+
+
 def lineage(journal, parent_id):
     """The parent and its ancestors, nearest first."""
     trajectory = []
@@ -90,7 +98,7 @@ class Window:
                    "leaderboard": sorted(valid(candidates), key=lambda c: c["score"], reverse=True)[:self.leaderboard],
                    "recent_failures": [c for c in candidates if c["status"] != "ok"][-self.failures:],
                    "recent_explorations": journal.records("exploration")[-self.explorations:],
-                   "probe_outputs": probe_outputs(journal)}
+                   "probe_outputs": probe_outputs(journal), "failed_probes": failed_probes(journal)}
         if parent_id and parent_id != "root":
             context["trajectory"] = list(reversed(lineage(journal, parent_id)[:self.trajectory]))
         return context
@@ -117,7 +125,7 @@ class Full:
                    "leaderboard": sorted(valid(candidates), key=lambda c: c["score"], reverse=True),
                    "failures": [c for c in candidates if c["status"] != "ok"],
                    "explorations": journal.records("exploration"),
-                   "probe_outputs": probe_outputs(journal)}
+                   "probe_outputs": probe_outputs(journal), "failed_probes": failed_probes(journal)}
         if parent_id and parent_id != "root":
             context["trajectory"] = list(reversed(lineage(journal, parent_id)))
         omitted = {}
@@ -166,7 +174,7 @@ class Aide:
                 "findings": active_findings(journal),
                 "recent_explorations": (journal.records("exploration")[-self.explorations:]
                                         if self.explorations else []),
-                "probe_outputs": probe_outputs(journal)}
+                "probe_outputs": probe_outputs(journal), "failed_probes": failed_probes(journal)}
 
     def observe(self, kind, record):
         pass

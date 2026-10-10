@@ -169,6 +169,80 @@ def audit_outputs(audit):
     return audit
 
 
+class Capture:
+    """Wraps the locked scorer to keep each scored fold's out-of-fold predictions.
+
+    With n_jobs=1 the grid search scores the variants in order, each on the folds in
+    split order, so the k-th call is variant k // folds on fold k % folds."""
+
+    def __init__(self, scorer, frozen):
+        self.frozen, self.captured = frozen, []
+
+        # A plain function: the search deep-copies scorer objects, but not functions.
+        def scoring(estimator, X, y):
+            fold = len(self.captured) % len(frozen)
+            classes = class_probabilities(estimator, X)
+            if classes is None:
+                prediction = prediction_of(estimator, X)
+            else:
+                labels = list(classes)
+                prediction = np.asarray(labels, dtype=object)[
+                    np.argmax(np.column_stack(list(classes.values())), axis=1)]
+            self.captured.append({"fold": fold, "row": frozen[fold][1], "y": np.asarray(y),
+                                  "prediction": prediction, "classes": classes})
+            return scorer(estimator, X, y)
+
+        self.scoring = scoring
+
+    def tables(self, variants, keys=None):
+        """One out-of-fold table per variant, or None when a fold was not scored (a
+        failed fit), since the call order then no longer identifies the folds."""
+        folds = len(self.frozen)
+        if len(self.captured) != variants * folds:
+            return None
+        return [prediction_table(self.captured[v * folds:(v + 1) * folds], keys) for v in range(variants)]
+
+
+def key_columns(keys, rows):
+    """The row keys of the given rows, one column per key column ('row_key' for one)."""
+    frame = keys.to_frame() if isinstance(keys, pd.Series) else keys
+    frame = pd.DataFrame(np.asarray(frame)) if not isinstance(frame, pd.DataFrame) else frame
+    frame = frame.iloc[rows].reset_index(drop=True)
+    if frame.shape[1] == 1:
+        return frame.set_axis(["row_key"], axis=1)
+    return frame.set_axis([f"row_key_{c}" for c in frame.columns], axis=1)
+
+
+def prediction_table(captured, keys=None):
+    # Multi-output labels and predictions are stored as one list per row.
+    cell = lambda a: list(a) if np.ndim(a) > 1 else a
+    # Multiclass: predicted label plus one probability column per class seen in any
+    # fold's training data; a class absent from a fold's training rows gets 0 there.
+    labels = sorted({label for c in captured if c["classes"] for label in c["classes"]}, key=str)
+    frames = []
+    for c in captured:
+        frame = pd.DataFrame({"row": c["row"], "fold": c["fold"], "y": cell(c["y"]),
+                              "prediction": cell(c["prediction"])})
+        if c["classes"] is not None:
+            for label in labels:
+                frame[f"proba_{label}"] = c["classes"].get(label, np.zeros(len(frame)))
+        frames.append(frame)
+    table = pd.concat(frames)
+    if labels:
+        table["prediction"] = table["prediction"].astype(type(labels[0]))
+    table = table.sort_values("row").reset_index(drop=True)
+    if keys is not None:  # evaluated once by the boundary audit
+        named = key_columns(keys, table["row"].to_numpy())
+        table = pd.concat([table[["row"]], named, table.drop(columns="row")], axis=1)
+    return table
+
+
+def probe_result(table, fold_scores, path):
+    return {"path": str(path), "rows": len(table), "columns": list(table.columns), "fold_scores": fold_scores,
+            "score": float(np.mean(fold_scores)), "preview": table.head(10).to_string(),
+            "summary": error_summary(table)}
+
+
 def probe(result, contract, request, directory, phases, started, keys=None):
     """Fit one configuration on the locked folds and save its out-of-fold predictions.
 
@@ -187,53 +261,19 @@ def probe(result, contract, request, directory, phases, started, keys=None):
         frozen = [(np.asarray(s["train"]), np.asarray(s["test"]))
                   for s in contract_folds(contract, request.get("folds_path"))]
     base = result["scoring"] if contract["scoring"].startswith("custom:") else get_scorer(contract["scoring"])
-    captured = []
-
-    def capturing(estimator, X, y):
-        fold = len(captured)  # one configuration, n_jobs=1: folds are scored in split order
-        classes = class_probabilities(estimator, X)
-        if classes is None:
-            prediction = prediction_of(estimator, X)
-        else:
-            labels = list(classes)
-            prediction = np.asarray(labels, dtype=object)[np.argmax(np.column_stack(list(classes.values())), axis=1)]
-        captured.append({"fold": fold, "row": frozen[fold][1], "y": np.asarray(y),
-                         "prediction": prediction, "classes": classes})
-        return base(estimator, X, y)
-
+    capture = Capture(base, frozen)
     with phases("grid_search", variants=1, folds=len(frozen)):
         search = pred.skb.make_grid_search(fitted=True, refit=False, n_jobs=1, cv=frozen,
-                                         scoring=capturing, error_score="raise")
-    if len(captured) != len(frozen):
-        raise ValueError(f"Expected {len(frozen)} scored folds, captured {len(captured)}")
+                                         scoring=capture.scoring, error_score="raise")
+    if len(capture.captured) != len(frozen):
+        raise ValueError(f"Expected {len(frozen)} scored folds, captured {len(capture.captured)}")
     with phases("write_predictions"):
-        # Multi-output labels and predictions are stored as one list per row.
-        cell = lambda a: list(a) if np.ndim(a) > 1 else a
-        # Multiclass: predicted label plus one probability column per class seen in any
-        # fold's training data; a class absent from a fold's training rows gets 0 there.
-        labels = sorted({label for c in captured if c["classes"] for label in c["classes"]}, key=str)
-        frames = []
-        for c in captured:
-            frame = pd.DataFrame({"row": c["row"], "fold": c["fold"], "y": cell(c["y"]),
-                                  "prediction": cell(c["prediction"])})
-            if c["classes"] is not None:
-                for label in labels:
-                    frame[f"proba_{label}"] = c["classes"].get(label, np.zeros(len(frame)))
-            frames.append(frame)
-        table = pd.concat(frames)
-        if labels:
-            table["prediction"] = table["prediction"].astype(type(labels[0]))
-        table = table.sort_values("row").reset_index(drop=True)
-        if keys is not None:  # evaluated once by the boundary audit
-            table.insert(1, "row_key", np.asarray(keys)[table["row"].to_numpy()])
+        table = capture.tables(1, keys)[0]
         table.to_parquet(directory / "oof_predictions.parquet", index=False)
     folds = [float(search.cv_results_[f"split{k}_test_score"][0]) for k in range(len(frozen))]
     verify_contract(contract)
     return {"status": "ok", "duration_s": time.monotonic() - started,
-            "probe": {"path": str(directory / "oof_predictions.parquet"), "rows": len(table),
-                      "columns": list(table.columns), "fold_scores": folds,
-                      "score": float(np.mean(folds)), "preview": table.head(10).to_string(),
-                      "summary": error_summary(table)}}
+            "probe": probe_result(table, folds, directory / "oof_predictions.parquet")}
 
 
 def read_table(path):
@@ -302,6 +342,13 @@ def execute(request, directory, phases):
     namespace = {"__name__": "generated_plan"}
     started = time.monotonic()
     with phases("build_graph"), skrub.config_context(eager_data_ops=False):
+        setup = request.get("setup_source")
+        if setup:
+            # The locked setup runs first, in the plan's namespace: pipelines and probes
+            # call build_evaluation() and use its names without pasting it. A file on
+            # disk keeps its functions' source readable for the scorer fingerprint.
+            (directory / "locked_setup.py").write_text(setup)
+            exec(compile(setup, str(directory / "locked_setup.py"), "exec"), namespace)
         exec(compile(source, str(directory / "plan.py"), "exec"), namespace)
         result = namespace["build"]()
     if isinstance(result, dict):
@@ -348,6 +395,7 @@ def execute(request, directory, phases):
         raise ValueError("Scoring requires an audited, locked evaluation setup")
     if request["kind"] == "probe":
         return probe(result, contract, request, directory, phases, started, evaluated.get("row_keys"))
+    keys = evaluated.get("row_keys")
     pred = result["pred"]
     with phases("graph_artifact", output="pipeline"):
         graph_artifact(pred, directory / "pipeline")
@@ -372,11 +420,16 @@ def execute(request, directory, phases):
     folds = len(frozen)
     # A custom scorer is the pipeline's own copy of the locked setup function; the
     # boundary audit has already checked it against the contract's fingerprint.
-    scorer = result["scoring"] if contract["scoring"].startswith("custom:") else contract["scoring"]
+    from sklearn.metrics import get_scorer
+
+    scorer = result["scoring"] if contract["scoring"].startswith("custom:") else get_scorer(contract["scoring"])
     jobs = min(grid_n_jobs(), len(grid) * folds)
+    # Sequential scoring keeps each variant's out-of-fold predictions, so a later probe
+    # of the candidate reuses them instead of fitting it again.
+    capture = Capture(scorer, frozen) if jobs == 1 else None
     with phases("grid_search", variants=len(grid), folds=folds, n_jobs=jobs):
         search = pred.skb.make_grid_search(fitted=True, refit=False, n_jobs=jobs, cv=frozen,
-                                         scoring=scorer, error_score=np.nan)
+                                         scoring=capture.scoring if capture else scorer, error_score=np.nan)
     raw = search.cv_results_
     # Summed fold times are compute time across the parallel jobs; divided by the
     # job count they approximate their share of grid_search wall time. The rest is
@@ -401,6 +454,13 @@ def execute(request, directory, phases):
                              "fold_scores": fold_scores if valid else None,
                              "mean_fit_time": float(raw["mean_fit_time"][index]),
                              "mean_score_time": float(raw["mean_score_time"][index])})
+    tables = capture.tables(len(variants), keys) if capture else None
+    if tables:
+        with phases("write_predictions"):
+            for variant, table in zip(variants, tables):
+                name = f"oof_predictions_{variant['index']}.parquet"
+                table.to_parquet(directory / name, index=False)
+                variant["oof_file"] = name
     with phases("verify_contract"):
         verify_contract(contract)
     return {"status": "ok", "variants": variants, "duration_s": time.monotonic() - started,

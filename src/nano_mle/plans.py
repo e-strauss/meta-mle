@@ -56,8 +56,10 @@ Plan contract (checked by the harness):
   splitters, custom splitter classes or explicit folds. For KFold use split_kwargs={}
   (n_splits/shuffle/random_state go to the constructor); split_kwargs are arguments
   to split(), e.g. groups for GroupKFold.
-- Pipelines start from locked_evaluation_source: paste it, call build_evaluation(),
-  build features and the model downstream, and return {'pred', 'scoring':
+- Pipelines start from locked_evaluation_source, which the harness runs before the
+  plan in the same module: call build_evaluation() and use the setup's imports,
+  constants and functions by name, without pasting or redefining them. Build
+  features and the model downstream, and return {'pred', 'scoring':
   setup scoring, 'row_keys': the same DataOp if declared}. The harness compares the
   X/y/CV/scoring/row-key graphs and the folds with the lock before fitting; drift is
   rejected. Keep the row count and order of X.
@@ -416,6 +418,12 @@ def evaluation_source(source):
     tree = Rename().visit(tree)
     tree.body.extend(ast.parse(f"def build_evaluation():\n    return {entry}()\n").body)
     return ast.unparse(tree) + "\n"
+
+
+def with_setup(setup_source, source):
+    """A pipeline as one self-contained program: the locked setup, which the harness
+    runs before a pipeline, followed by the pipeline itself."""
+    return setup_source + "\n\n" + source
 
 
 LITERAL_OUTCOMES = (ast.List, ast.Tuple, ast.Dict)

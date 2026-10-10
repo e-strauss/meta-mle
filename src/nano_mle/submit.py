@@ -15,7 +15,7 @@ from .agents import ModelUnavailable
 from .contracts import digest, source_manifest
 from .execution import run_plan
 from .models import Task
-from .plans import resolve_source, validate_source
+from .plans import resolve_source, validate_source, with_setup
 from .prompts import chosen_prompts
 from .search import valid
 from .store import Store, new_id
@@ -83,7 +83,9 @@ def write_submission(workspace, store, backend, candidate_id=None, task=None, ma
     context = {"task": task.model_dump(), "sources": sources, "source_heads": source_heads(sources),
                "candidate": {"id": candidate["id"], "score": candidate["score"],
                              "configuration": candidate["configuration"]},
-               "resolved_source": resolve_source(path.read_text(), candidate["configuration"])}
+               # Final plans are self-contained: the harness runs no setup before them.
+               "resolved_source": with_setup(store.meta("contract")["setup_source"],
+                                             resolve_source(path.read_text(), candidate["configuration"]))}
     intent = {"goal": "final refit and submission for the candidate's resolved source"}
     directory = workspace / "submission" / record["id"]
     directory.mkdir(parents=True)

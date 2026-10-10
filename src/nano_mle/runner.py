@@ -267,6 +267,7 @@ class Runner:
             if kind in ("pipeline", "probe"):
                 contract = self.store.meta("contract")
                 request["contract"] = contract
+                request["setup_source"] = contract["setup_source"]
                 if contract.get("folds_file"):
                     request["folds_path"] = str(self.workspace / contract["folds_file"])
             attempt = {"id": attempt_id, "owner_id": record["id"], "status": "running",
@@ -364,6 +365,20 @@ class Runner:
             source = self._candidate_context(candidate)["resolved_source"]
         self.store.put("probe", record)
         self.notify(f"Probe {decision.candidate_id or 'new pipeline'}: {decision.question}")
+        saved = decision.candidate_id and candidate.get("oof_file")
+        if saved:
+            # The candidate's scoring kept its out-of-fold predictions: no second fit.
+            import pandas as pd
+
+            from .worker import probe_result
+            directory = Path(candidate["source_path"]).parent
+            table = pd.read_parquet(self.workspace / directory / saved)
+            result = {"status": "ok", "reused": True,
+                      "probe": probe_result(table, candidate["fold_scores"], self.workspace / directory / saved)}
+            record.update(status="ok", result=result, artifact_path=str(directory))
+            self.store.put("probe", record)
+            export_workspace(self.store)
+            return
         intent = {"question": decision.question, "purpose": "out-of-fold predictions for later analysis"}
         result, attempt = self.execute("probe", record, {}, intent, source=source)
         record.update(status=result["status"], result=result, artifact_path=attempt["path"])
