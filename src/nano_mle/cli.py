@@ -64,7 +64,7 @@ def main():
     init.add_argument("--max-repairs", type=int, default=2)
     init.add_argument("--max-probes", type=int, default=4)
     init.add_argument("--max-model-calls", type=int, default=80)
-    init.add_argument("--execution-timeout", type=int, default=120)
+    init.add_argument("--execution-timeout", type=int, default=1800)
     init.add_argument("--time-budget", type=duration, help="End-to-end run time, e.g. 8h, 90m or 3600 (seconds)")
     run = sub.add_parser("run", help="Run/resume a workspace using the explicitly supplied model (API calls)")
     run.add_argument("workspace", type=Path)

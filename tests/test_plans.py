@@ -357,3 +357,52 @@ def test_model_choice_conventions_reach_controller_and_planner():
     for instructions in prompts.prompts().rendered().values():
         assert "Model families" in instructions and "context.hardware" in instructions
         assert "Training pool" in instructions
+
+
+def test_plan_reader_functions_allowed_and_fingerprinted(tmp_path):
+    from nano_mle.graphs import fingerprint
+
+    def read_sizes(paths, scale=1):
+        return pd.DataFrame({"n": [len(p) * scale for p in paths]})
+
+    def summarize(paths):
+        return paths
+
+    read_sizes.__module__ = summarize.__module__ = "generated_plan"  # as if defined in the plan
+    with skrub.config_context(eager_data_ops=False):
+        paths = skrub.as_data_op(str(tmp_path / 'rows.csv')).skb.apply_func(pd.read_csv)['path']
+        read = paths.skb.apply_func(read_sizes, scale=2)
+        validate_graph(read)
+        assert fingerprint(read) == fingerprint(paths.skb.apply_func(read_sizes, scale=2))
+        assert fingerprint(read) != fingerprint(paths.skb.apply_func(read_sizes, scale=3))
+        with pytest.raises(ValueError, match="not functions defined in the plan"):
+            validate_graph(paths.skb.apply_func(summarize))
+        with pytest.raises(ValueError):
+            validate_graph(paths.map(read_sizes))
+
+
+@pytest.mark.parametrize('source,ok', [
+    ("import io\ndef build():\n    return io.BytesIO(b'')\n", True),
+    ("from io import BytesIO\ndef build():\n    return BytesIO(b'')\n", True),
+    ("import io\ndef build():\n    return io.open('x')\n", False),
+    ("from io import FileIO\ndef build():\n    return FileIO('x')\n", False),
+])
+def test_io_limited_to_memory_buffers(source, ok):
+    if ok:
+        validate_source(source)
+    else:
+        with pytest.raises(ValueError):
+            validate_source(source)
+
+
+@pytest.mark.parametrize('source,ok', [
+    ("def read_x(p):\n    return p\ndef build():\n    return X.skb.apply_func(read_x)\n", True),
+    ("def summarize(p):\n    return p\ndef build():\n    return X.skb.apply_func(summarize)\n", False),
+    ("def build():\n    model.eval()\n", False),
+])
+def test_plan_functions_in_graph_rejected_before_running(source, ok):
+    if ok:
+        validate_source(source)
+    else:
+        with pytest.raises(ValueError, match="estimator or module class"):
+            validate_source(source)

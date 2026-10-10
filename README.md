@@ -85,7 +85,7 @@ the configuration it used in its workspace metadata.
 | `[execution] cpu_threads` | 32 | Logical CPUs the workers may use; 0 means all. Workers are pinned to the first `cpu_threads` CPUs the runner may use, a hard cap even when a plan sets `n_jobs=-1`. OpenMP/BLAS thread counts are set to match. See [CPU setup](#cpu-setup-and-parallel-runs). |
 | `[hardware] memory_gb`, `gpus` | 0, [] | What the agents are told about the machine (`context.hardware`, with `cpu_threads`): stated in the config, never probed, since with parallel runs the node holds more than one run may use. Keep `gpus` in line with what the run can see (`CUDA_VISIBLE_DEVICES`). 0 or [] means not stated. |
 | `[execution] grid_n_jobs` | 1 | Fits run in parallel processes by the grid search; each gets `cpu_threads // grid_n_jobs` threads and its own copy of X and y, so values above 1 only pay off for small data. Probes fit sequentially with all threads. |
-| `[plans] restrict_primitives` | false | Limit `apply_func` to the curated primitives in `graphs.PRIMITIVES`. Disabled for now, so plans may call any library function; plan-defined functions and lambdas are rejected either way. |
+| `[plans] restrict_primitives` | false | Limit `apply_func` to the curated primitives in `graphs.PRIMITIVES`. Disabled for now, so plans may call any library function; plan-defined functions (other than `read_*` file readers) and lambdas are rejected either way. |
 | `[memory.<name>] …` | memory defaults | Parameters of a memory, read at `init` (e.g. `[memory.window] leaderboard = 8`, `[memory.full] max_chars = 400000`). |
 | `[policy.<name>] …` | policy defaults | Parameters saved at `init`: draft count, UCT exploration coefficient or MCGS seed. |
 | `[controller.auto] time_margin` | 1.0 | Auto stops when the remaining time is less than this factor times the longest of the last 3 expansions' worker time (repairs included). 0 disables the estimate. |
@@ -256,6 +256,13 @@ re-implements or repairs. Repairs see the full traceback.
 [D2 source](docs/diagrams/run-flow.d2) ·
 [Regeneration instructions](docs/diagrams/README.md)
 
+The [proposed configurable system](docs/diagrams/configurable-system.svg) extends
+this flow with three data-understanding modes, optional components, explicit
+experiment operations and resumable refinement or population workflows. It is a
+design proposal; the diagram above describes the current implementation.
+An [annotated version](docs/diagrams/configurable-system-agents.svg) maps components
+to the proposed mle-claude, AIDE, MLEvolve, MLE-STAR and FM-Agent profiles.
+
 Before the evaluation lock, the controller, planner and writer are asked for a
 population check: labelled rows may be selected differently from the rows to be
 predicted, also on label-related properties the prediction rows do not show. They
@@ -327,7 +334,12 @@ are stateless calls that see what the harness passes them:
 | Hardware | can inspect the machine | `context.hardware` from `[hardware]` and `cpu_threads` in the config; never probed |
 
 Every implementation runs in a time-bounded subprocess. If it fails, the repairer
-gets the source and traceback and may fix it, up to `--max-repairs` times. A
+gets the source and traceback and may fix it, up to `--max-repairs` times. A repair is
+not started when less run time remains than the median attempt of that kind in this
+run (event `repair_skipped`). The writer and repairer see the selected parent's
+source and the references' source; the planner adds a candidate as a reference by
+listing it in its proposal's `reference_ids`, e.g. a draft from root that reuses an
+earlier candidate's components. A
 repair must keep the planned experiment; a different hypothesis needs a new proposal.
 
 Budgets cover controller actions, model calls (counted before dispatch, including
@@ -469,6 +481,10 @@ check (`graphs.py`):
 - Computation is expressed as fine-grained DataOps. No UDFs, `deferred`, callable
   `apply`/`map`, eager reads (pandas, polars, pyarrow or numpy file readers),
   materialised data, files, or manual fitting in the graph.
+- Files no library reader handles (images, audio, documents) are read by a
+  plan-defined function named `read_*`, applied with `paths.skb.apply_func(read_x, ...)`.
+  It is the only plan function allowed in the graph, is fingerprinted by its source,
+  and should only read and decode; everything after it is DataOps.
 - Plans keep no state between fits: no module-level caches, `global`, or mutable class
   attributes. Module constants such as paths and the `FIT`/`PREDICT` dicts are fine.
 - Custom classes are allowed when they are estimators or transformers (`fit`), torch

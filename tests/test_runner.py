@@ -466,3 +466,48 @@ def test_every_role_sees_the_configured_hardware(workspace):
     context = runner.context("control")
     runner.store.close()
     assert {"cpu_threads", "memory_gb", "gpus", "note"} <= set(context["hardware"])
+
+
+class ReusingBackend(ScriptedBackend):
+    """Drafts from root that build on the first candidate, naming it as a reference."""
+    def __init__(self):
+        super().__init__()
+        self.references = []
+
+    def plan(self, context):
+        proposal = super().plan(context)
+        candidates = [c["id"] for c in context.get("candidates", context.get("leaderboard", []))]
+        return proposal.model_copy(update={"reference_ids": candidates[:1] + ["missing_candidate"]})
+
+    def implement(self, kind, context, intent):
+        if kind == "pipeline":
+            self.references.append([r["id"] for r in context["references"]])
+        return super().implement(kind, context, intent)
+
+
+def test_candidates_the_planner_reuses_reach_the_writer_as_references(tmp_path):
+    train = tmp_path / "train.csv"
+    pd.DataFrame({"a": range(18), "b": [1, 2, 3] * 6,
+                  "target": [2 * i + 0.1 for i in range(18)]}).to_csv(train, index=False)
+    task = Task(description="Independent regression data", sources={"train": str(train)}, target="target")
+    root = tmp_path / "workspace"
+    initialize(root, task, Budget(max_expansions=2, max_evaluations=4, max_repairs=0), search_policy="draft-greedy")
+    backend = ReusingBackend()
+    Runner(root, backend).run(submit=False)
+    store = Store(root)
+    first, second = store.records("expansion")
+    assert backend.references == [[], [f"{first['id']}_variant_1"]]  # unknown ids are dropped
+    assert second["parent_id"] == "root" and second["reference_ids"] == [f"{first['id']}_variant_1"]
+
+
+def test_no_repair_starts_when_less_time_remains_than_a_typical_attempt(workspace, monkeypatch):
+    runner = Runner(workspace, ScriptedBackend())
+    monkeypatch.setattr(runner, "remaining_seconds", lambda: 5)
+    monkeypatch.setattr(runner, "time_context", lambda: {"typical_attempt_s": {"expansion": 60}})
+    monkeypatch.setattr("nano_mle.runner.run_plan", lambda *a: {"status": "failed", "error": "boom"})
+    runner.budget = runner.budget.model_copy(update={"max_repairs": 2})
+    record = {"id": "expansion_abc"}
+    result, _ = runner.execute("exploration", record, {}, {}, source="def build():\n    return {}\n")
+    assert result["status"] == "failed" and len(record["attempt_ids"]) == 1
+    assert runner.store.db.execute("SELECT 1 FROM events WHERE kind=?", ("repair_skipped",)).fetchone()
+    runner.store.close()

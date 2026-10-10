@@ -43,8 +43,11 @@ it is only as good as the evaluation setup is representative.
   quantity, compare one-sided thresholds (at least, at most) as well as bands. Lock
   the lowest AUC; among rules within the fold noise of it, prefer the least
   restrictive, since excluding rows the prediction set may contain costs more than a
-  small observable difference. The evaluation setup reports the AUC of every
-  compared population.
+  small observable difference. A difference in how inputs were recorded (format,
+  scale, resolution, device) that preprocessing can remove calls for normalising the
+  inputs, not for dropping rows. A population must keep enough rows to train the
+  models you intend to use: weigh a lower AUC against the training rows it costs.
+  The evaluation setup reports the AUC and row count of every compared population.
 """,
         "training_pool": """- Training pool. The locked rows are the training rows as well as the test folds,
   and every later experiment fits all folds on them: size the population for the
@@ -71,7 +74,8 @@ it is only as good as the evaluation setup is representative.
   swept in grids. When two expansions in a row move the score by less than the fold
   noise, the family has plateaued: switch to a different family, a metric-aligned
   objective, a new signal source or an ensemble of families, not another sweep. A
-  plateau is not a reason to stop.
+  pretrained model used as a frozen feature extractor and the same model fine-tuned
+  end to end are different families. A plateau is not a reason to stop.
 """,
         "objective": """- Training objective. A model is only as good as the metric its loss rewards. Work
   out what the task's metric rewards (an ordering, calibrated probabilities, a
@@ -142,7 +146,9 @@ it is only as good as the evaluation setup is representative.
         "model_families": """- Model families. Candidates should cover several model families, at least one
   learned from the rows, before one is tuned. When two expansions in a row move the
   score by less than the fold noise, ask for a different direction (another family,
-  objective or signal), not another sweep. A plateau is not a reason to stop.
+  objective or signal), not another sweep. A pretrained model kept frozen and the
+  same model fine-tuned count as different families. A plateau is not a reason to
+  stop.
 """,
         "data_volume_study": """- Data volume study. When sources are large (millions of rows), decide the modelled
   population and the parts of large tables the task needs with evidence before the
@@ -196,6 +202,9 @@ Once a candidate combines several feature blocks or components, an ablation that
 drops one at a time is a worthwhile experiment: it shows which parts carry the
 score and which only add cost.
 State the hypothesis and the changes, grounded in findings, references and history.
+List in reference_ids the candidates whose code the experiment reuses beyond the
+selected parent (e.g. a draft that builds on an earlier candidate's components): the
+writer sees only the parent's and these candidates' source.
 """
 
     writer_rules = """

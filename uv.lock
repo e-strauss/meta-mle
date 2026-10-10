@@ -1715,6 +1715,7 @@ dependencies = [
     { name = "kaggle" },
     { name = "lightgbm" },
     { name = "numpy" },
+    { name = "opencv-python" },
     { name = "pandas" },
     { name = "polars" },
     { name = "pyarrow" },
@@ -1725,7 +1726,9 @@ dependencies = [
     { name = "sentence-transformers" },
     { name = "skorch" },
     { name = "skrub" },
+    { name = "timm" },
     { name = "torch" },
+    { name = "torchvision" },
     { name = "xgboost" },
 ]
 
@@ -1744,6 +1747,7 @@ requires-dist = [
     { name = "kaggle", specifier = ">=2.2.4" },
     { name = "lightgbm", specifier = ">=4.7.0" },
     { name = "numpy", specifier = ">=2.5.3" },
+    { name = "opencv-python", specifier = ">=5.0.0.93" },
     { name = "pandas", specifier = ">=3.0.6" },
     { name = "polars", specifier = ">=1.44.2" },
     { name = "pyarrow", specifier = ">=25.0.1" },
@@ -1754,7 +1758,9 @@ requires-dist = [
     { name = "sentence-transformers", specifier = ">=6.1.0" },
     { name = "skorch", specifier = ">=1.4.0" },
     { name = "skrub", specifier = ">=0.11.0" },
+    { name = "timm", specifier = ">=1.0.30" },
     { name = "torch", specifier = ">=2.14.1", index = "https://download.pytorch.org/whl/cu126" },
+    { name = "torchvision", specifier = ">=0.29.1", index = "https://download.pytorch.org/whl/cu126" },
     { name = "xgboost", specifier = ">=3.4.1" },
 ]
 
@@ -2046,6 +2052,25 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/50/9a/8c75e8c8a5b407a0586faeb2afac91674ff955c191ecc1d6d3b6669f6788/openai-2.54.0.tar.gz", hash = "sha256:e3e6f8bc1ba30ddf381ace1a14340eed381cb984a1a59bd0f34b5be3b5d49cfa", size = 1100285, upload-time = "2026-08-11T18:46:59.035Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/a8/bb76c7356de8ad57f59d5ff993d434df0607f07f08bcc9c9a5c275e399c0/openai-2.54.0-py3-none-any.whl", hash = "sha256:89089789197ccdb87f173a03145ed1598d00795220c93e96cf712b1cbf5e5f2b", size = 1660351, upload-time = "2026-08-11T18:46:56.684Z" },
+]
+
+[[package]]
+name = "opencv-python"
+version = "5.0.0.93"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/79/4c/a438d23e09ce2033c09f7b784ad2fbdb0adf529e434101ed28f142226f98/opencv_python-5.0.0.93.tar.gz", hash = "sha256:66aac3e5b5faa48d4025816592f3af19e4bfc2c68dec067bae2dbb4ca10aa9e2", size = 81802749, upload-time = "2026-07-02T06:59:53.815Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9c/75/76f6ade78f6102c61034f828e2a22616708df2c9504bc8d6af9dd8f73dc5/opencv_python-5.0.0.93-cp37-abi3-macosx_13_0_arm64.whl", hash = "sha256:198a75138241810206a17c829dbcc40a7cb1841cda538ca86cbbfc6c7d95f898", size = 48322443, upload-time = "2026-07-02T05:50:25.466Z" },
+    { url = "https://files.pythonhosted.org/packages/15/8c/bc1bda6aae69a32e9d84fc34153ba104cd25226861eb4aea33b2cea4860d/opencv_python-5.0.0.93-cp37-abi3-macosx_14_0_x86_64.whl", hash = "sha256:6bbc32f59e1b1a7db7b39c81f63d00625f041d333037fd8702f6da52cc39108b", size = 34782755, upload-time = "2026-07-02T05:51:30.556Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/8a/b04776ec45d2dea08a1b176f1829201db3515d4ed16c35f8fcc9fa7beb16/opencv_python-5.0.0.93-cp37-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:e2b4272e736836f66c2d176e43ab8101f3a00d45654916399f52e150c58981ac", size = 50614064, upload-time = "2026-07-02T06:53:22.604Z" },
+    { url = "https://files.pythonhosted.org/packages/95/54/eb47866b94f2b5b42dde17644b78055ef1ee05aae59962c7290e55270803/opencv_python-5.0.0.93-cp37-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:f8b6d0a212253dd26ad338c812f1f23ca118fdf05a9c8c6b9444f161aa8c5881", size = 71064711, upload-time = "2026-07-02T06:54:13.148Z" },
+    { url = "https://files.pythonhosted.org/packages/93/da/962579f1e703cbf8c5422fd1f576467dcb3b5b0b0b81c1471c979764353a/opencv_python-5.0.0.93-cp37-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:08d5d91d967b58d6db86073b2ad3eaef88ca4ebdfd45c9059bf59f5ded0c7ad2", size = 49798576, upload-time = "2026-07-02T06:54:33.781Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/4c/c73f828fdbcd37eaf21d08fa852544a3ca7c2dbb3ea76873d64f2ea413d1/opencv_python-5.0.0.93-cp37-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:c8de2dec111122a02e8beb28e16c31904992dfd6186560b142a92c71403c1039", size = 73783032, upload-time = "2026-07-02T06:55:03.415Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/4b/edaf83b996ca5a1a3d8ccad485706b9c6d4742b13b9c4586bf1c1e7d9423/opencv_python-5.0.0.93-cp37-abi3-win32.whl", hash = "sha256:4b4b1a34c79bf8d3738e3cfe9a9e67b51a79663f6b692cbdad8c31f570da4157", size = 35564734, upload-time = "2026-07-02T05:49:57.704Z" },
+    { url = "https://files.pythonhosted.org/packages/21/f0/9fa6e85cb10c8eb36a0222d27e50fe381b86ce49a55446bf39f491727564/opencv_python-5.0.0.93-cp37-abi3-win_amd64.whl", hash = "sha256:f90ba04b8f73bc5c3814037699739f0156f597338a98f05956c684e7c3ca10d2", size = 44000345, upload-time = "2026-07-02T05:49:54.971Z" },
 ]
 
 [[package]]
@@ -3109,6 +3134,22 @@ wheels = [
 ]
 
 [[package]]
+name = "timm"
+version = "1.0.30"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "pyyaml" },
+    { name = "safetensors" },
+    { name = "torch" },
+    { name = "torchvision" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0e/ab/49041213990e48edcb6013463b18ef86d8d3c5d6ac5b408802c480443025/timm-1.0.30.tar.gz", hash = "sha256:1444a3af7e17fdba5440ac2bcf6e4b728da96dd62289ed9e1bcba31a545f5935", size = 2534738, upload-time = "2026-09-22T20:46:13.9Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/85/b897716d0fa016af23b11e6526f5ef76d2013e8bc36b9c7ce15d9200e456/timm-1.0.30-py3-none-any.whl", hash = "sha256:c8e27adf6801a2fdfb570dbbdd171f2f084756eefc673df8cfaab06bd14864f3", size = 2668917, upload-time = "2026-09-22T20:46:12.11Z" },
+]
+
+[[package]]
 name = "tokenizers"
 version = "0.23.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3169,6 +3210,30 @@ wheels = [
     { url = "https://download-r2.pytorch.org/whl/cu126/torch-2.14.1%2Bcu126-cp315-cp315t-manylinux_2_28_aarch64.whl", hash = "sha256:62d5dee7cc636941a221e8dbfc5941bd33c5fbef654b74ed6c6d6460daad9a3a", upload-time = "2026-09-30T20:14:18Z" },
     { url = "https://download-r2.pytorch.org/whl/cu126/torch-2.14.1%2Bcu126-cp315-cp315t-manylinux_2_28_x86_64.whl", hash = "sha256:2333d89db02409545b0caa87f2ca60b89ddbbfc9dedfb5dcf15fd55c2411d1d4", upload-time = "2026-09-30T20:14:49Z" },
     { url = "https://download-r2.pytorch.org/whl/cu126/torch-2.14.1%2Bcu126-cp315-cp315t-win_amd64.whl", hash = "sha256:70a34038b08a14fc722716f761c5114ad441493d931c688786342d93871c8d68", upload-time = "2026-09-30T20:16:30Z" },
+]
+
+[[package]]
+name = "torchvision"
+version = "0.29.1+cu126"
+source = { registry = "https://download.pytorch.org/whl/cu126" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pillow" },
+    { name = "torch" },
+]
+wheels = [
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:9841983d0f4c8ec7227f64357cfd6549fee083656badfe3e85ecc8202927acf6", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:d1b1e196a514c0ec73a35699aebabc4afdbc333092569b4d0c26bed9bb4ed568", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp314-cp314-win_amd64.whl", hash = "sha256:f84aa3864cc5a4da6de460275a07a3e20deb982d715bf1c4eae1c624311c3c58", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:b4914b7ac763e68a2dc369a251de201c0d682bf46d7c46d50e161ae62a1da322", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp314-cp314t-manylinux_2_28_x86_64.whl", hash = "sha256:78115e244f2d76270b45462f0bae007af8d1ec51d12ae10cfc40e2e5a1112d4f", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp314-cp314t-win_amd64.whl", hash = "sha256:e6e5a4edd2c34ea69eda59060a18e360d485220a5e544da12f198f109440ace9", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp315-cp315-manylinux_2_28_aarch64.whl", hash = "sha256:3b63f88832665a6b03dd65696243d9a274699c84fbe35200d1388f52ece0076c", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp315-cp315-manylinux_2_28_x86_64.whl", hash = "sha256:c7c485a49482071741aca33dbc594d5213b3e88c57178791b3dae0dfd0a736c4", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp315-cp315-win_amd64.whl", hash = "sha256:bf405f8717c6bf8a255cd7b603b5f17d6b35c750718837e73acae5e194bb7179", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp315-cp315t-manylinux_2_28_aarch64.whl", hash = "sha256:59a00d3d69baa43bd01f547bd559b2cfbea53b387f07c45cd79fde4164326046", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp315-cp315t-manylinux_2_28_x86_64.whl", hash = "sha256:8c278a7545d631ad71013edff80543989978c952c1470609793ea384bea91533", upload-time = "2026-09-30T15:46:22Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu126/torchvision-0.29.1%2Bcu126-cp315-cp315t-win_amd64.whl", hash = "sha256:3a827403f7fe07d9eeaeb9fbe5df744fe0ef88e0cd62704868188ad4c35c1eed", upload-time = "2026-09-30T15:46:22Z" },
 ]
 
 [[package]]

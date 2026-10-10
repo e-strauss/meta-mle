@@ -6,6 +6,7 @@ STARTED = time.perf_counter()
 
 import json
 import math
+import multiprocessing
 import sys
 import traceback
 from pathlib import Path
@@ -406,7 +407,30 @@ def execute(request, directory, phases):
             "contract_id": contract["id"], "fold_fingerprint": contract["fold_fingerprint"]}
 
 
+def describe(error):
+    """The error with its root cause: a chained exception (raise ... from e) often
+    states only a symptom, and the cause is what a repair needs."""
+    text = f"{type(error).__name__}: {error}"
+    cause, seen = error, {id(error)}
+    while (cause.__cause__ or cause.__context__) is not None and id(cause.__cause__ or cause.__context__) not in seen:
+        cause = cause.__cause__ or cause.__context__
+        seen.add(id(cause))
+    if cause is not error:
+        text += f" (caused by {type(cause).__name__}: {cause})"
+    return text
+
+
+def clip(text, head=4000, tail=8000):
+    """Keep both ends of a long traceback: the first exception of a chain is printed
+    first, the final one last."""
+    return text if len(text) <= head + tail else text[:head] + "\n[...]\n" + text[-tail:]
+
+
 def main():
+    # Plan classes live in the in-memory module generated_plan, which child processes
+    # cannot import. Python 3.14 starts children with forkserver, which pickles them by
+    # module name, so DataLoader workers would fail; forked children inherit the module.
+    multiprocessing.set_start_method("fork", force=True)
     directory = Path(sys.argv[1]).resolve()
     phases = Phases(directory / "timings.json", started=STARTED)
     phases.add("imports", IMPORTED - STARTED)
@@ -418,8 +442,7 @@ def main():
         with skrub.config_context(eager_data_ops=False):
             response = execute(request, directory, phases)
     except Exception as error:
-        response = {"status": "failed", "error": f"{type(error).__name__}: {error}",
-                    "traceback": traceback.format_exc()[-12000:]}
+        response = {"status": "failed", "error": describe(error), "traceback": clip(traceback.format_exc())}
         if isinstance(error, ContractDrift):
             response.update(warning="contract_drift", changed_components=error.changes)
     usage = directory / "usage.json"

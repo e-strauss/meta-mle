@@ -19,6 +19,7 @@ from sklearn.base import BaseEstimator
 
 from .config import load_config
 from .contracts import canonical_hash
+from .plans import OPAQUE_FUNCTION
 
 
 # Curated library primitives for apply_func and callable arguments. Enforced only
@@ -36,6 +37,12 @@ def is_plan_function(value):
     """Functions written in the plan, including lambdas: UDFs, always rejected."""
     return (getattr(value, "__module__", None) == "generated_plan"
             or getattr(value, "__name__", None) == "<lambda>")
+
+
+def is_plan_reader(value):
+    """A plan-defined function named read_*: allowed as apply_func, to read files that a
+    library reader cannot (e.g. images of file-backed rows). Fingerprinted by source."""
+    return inspect.isfunction(value) and value.__module__ == "generated_plan" and value.__name__.startswith("read_")
 
 
 def allowed_callable(value):
@@ -67,11 +74,11 @@ def validate_graph(plan):
 
     for node in graph(plan)["nodes"].values():
         impl = node._skrub_impl
-        if type(impl).__name__ == "Call" and not allowed_callable(impl.func):
-            raise ValueError("Opaque function node: use fine-grained DataOps and library functions, "
-                             "not functions defined in the plan")
+        if type(impl).__name__ == "Call" and not (allowed_callable(impl.func) or is_plan_reader(impl.func)):
+            raise ValueError(OPAQUE_FUNCTION)
         if type(impl).__name__ == "Value" and isinstance(impl.value, (pd.DataFrame, pd.Series, np.ndarray)):
-            raise ValueError("Materialized data leaf: record reads and transformations inside the graph")
+            raise ValueError("Materialized data leaf: record reads and transformations inside the graph; "
+                             "report fixed values (e.g. numbers from explorations) as plain dicts or lists")
         if type(impl).__name__ == "CallMethod":
             check_callbacks(impl.args, impl.method_name)
             check_callbacks(impl.kwargs, impl.method_name)
@@ -181,6 +188,8 @@ def canonical_graph(roots):
                 description["methods"] = class_methods(cls)
             return description
         if callable(value):
+            if is_plan_reader(value):
+                return {"reader": scorer_fingerprint(value)}
             if getattr(value, "__module__", "") == "generated_plan":
                 raise ValueError("Custom functions cannot be embedded as opaque graph operations")
             return {"callable": f"{getattr(value, '__module__', '')}.{getattr(value, '__qualname__', getattr(value, '__name__', ''))}"}

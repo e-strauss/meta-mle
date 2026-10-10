@@ -23,6 +23,22 @@ Plan contract (checked by the harness):
   No deferred, UDFs (functions or lambdas defined in the plan), callable
   apply/map/transform, eager reads, materialised data or files. Dictionary and
   Series maps are allowed. Estimators are applied with .skb.apply(...).
+- Files no library reader handles (images, audio, documents of file-backed rows) are
+  read by a plan-defined reader: a function named read_* that takes paths (and
+  parameters) and only reads and decodes them into a DataFrame or array, applied
+  with paths.skb.apply_func(read_images, size=...). It reads only through a
+  library's file reader (e.g. PIL.Image.open, soundfile.read), never the built-in
+  open; take metadata such as dimensions or duration from that reader's result.
+  For remote paths, fetch the files in batched calls (the filesystem's cat on a
+  list of paths, e.g. fsspec.filesystem('gs').cat(paths)) rather than opening them
+  one by one, and decode the bytes in parallel (concurrent.futures), e.g. from
+  io.BytesIO; io allows only BytesIO and StringIO.
+  Build the paths with string DataOps from a source directory constant, e.g.
+  DIR + X['key'] + '.ext'. Everything after the read (statistics, filters, joins,
+  models) is DataOps and library calls, e.g. a quick check in an exploration with
+  skrub.as_data_op(estimator).skb.apply_func(cross_val_score, X, y, cv=..., scoring=...)
+  (apply_func passes the DataOp it is called on as the first argument). Pipelines use the same reader, so explorations and
+  pipelines decode identically.
 - Prefer fine-grained DataOps whenever the step can be written with them. Write a
   custom estimator or transformer class (sklearn API, defining fit) only when the
   step needs fitted state or is a genuinely new model, e.g. a torch network.
@@ -31,7 +47,9 @@ Plan contract (checked by the harness):
   evidence (own splits or subsamples, setups the lock does not allow), e.g. inside a
   custom estimator; such numbers are not comparable with candidate scores.
 - Evaluation setup returns {'X', 'y', 'scoring', optional 'row_keys', optional
-  'audit' (a DataOp or dict of named DataOps)}: X marked with
+  'audit' (a DataOp or dict of named DataOps; fixed values such as numbers from
+  explorations go in plain dicts or lists, since DataFrames, Series and arrays
+  placed directly into the graph are rejected)}: X marked with
   mark_as_X(cv=..., split_kwargs=...) and the raw y marked with mark_as_y(). scoring is a sklearn scorer string or a plain function
   scorer(estimator, X, y) -> float defined in the setup (higher is better), called on
   each test fold with that fold's marked X. CV is explicit and deterministic: sklearn
@@ -103,12 +121,34 @@ Skrub and library notes (exact signatures; do not guess other keywords):
   predict_proba runs under torch.no_grad() in batches and returns a numpy array of
   shape (n_rows, n_classes), one column per label for multi-label targets. Keep the
   fitted network on self (e.g. self.net_), and print training losses if useful.
-- Custom classes are estimators/transformers (fit), torch modules (forward) or CV
-  splitters (split(self, X, y=None, groups=None) and get_n_splits(self, X=None,
+- The training loop may be delegated to skorch: the estimator builds a skorch
+  NeuralNet in fit (module, criterion, optimizer, LR schedule and per-epoch scoring as
+  callbacks) and keeps only the glue: rows to a torch Dataset, network output to
+  predictions. Subclass the net or a skorch Callback for what skorch lacks, e.g. mixed
+  precision in train_step, or keeping the best epoch's weights in memory (copy the
+  state_dict) rather than in Checkpoint files.
+- Training on file-backed rows: when the decoded files fit in context.hardware's
+  memory, read them in the graph at the size the model uses,
+  X['path'].skb.apply_func(read_images, size=...), and train on the in-memory arrays
+  (augmentation inside the estimator), so each file is read once per fit rather than
+  once per epoch. Only when they do not fit, decode lazily in a torch Dataset (a class
+  with __len__ and __getitem__ calling the reader on one path) with DataLoader
+  workers.
+- A validation set for early stopping or epoch selection is carved from the fold's
+  own training rows, as its own node: a transformer whose fit_transform(X, y) splits
+  them and returns {'X': ..., 'y': ..., 'X_val': ..., 'y_val': ...}, and whose
+  transform(X) returns {'X': X, 'y': None, 'X_val': None, 'y_val': None}. Apply it
+  with parts = X.skb.apply(splitter, y=y, no_wrap=True), then
+  parts['X'].skb.apply(model, y=parts['y'], fit_kwargs={'X_val': parts['X_val'],
+  'y_val': parts['y_val']}) with fit(self, X, y, X_val=None, y_val=None). The locked
+  test fold never steers training.
+- Custom classes are estimators/transformers (fit), torch modules (forward), torch
+  Datasets (__getitem__), skorch nets or callbacks (train_step, infer, on_* hooks) or
+  CV splitters (split(self, X, y=None, groups=None) and get_n_splits(self, X=None,
   y=None, groups=None)). Estimators subclass BaseEstimator and keep __init__ to
   storing parameters; classifier wrappers list ClassifierMixin before BaseEstimator.
   Plans keep no state between fits: no module-level caches, globals or mutable class
-  attributes, and no file reads outside the recorded readers.
+  attributes, and no file reads outside the recorded readers and read_* readers.
 - Boolean masks over nullable columns must not contain NA: use .fillna(False) or
   str methods with na=False before combining masks with & or |.
 - Output names are dict keys that must be valid Python identifiers.
@@ -126,7 +166,9 @@ GUIDE = _GUIDE.replace("{apply_func}", APPLY_FUNC[load_config()["plans"]["restri
 # which is not installed fail with MissingLibrary; the runner records it.
 DENIED_MODULES = {"os", "sys", "subprocess", "shutil", "pathlib", "socket", "ctypes", "importlib",
                   "builtins", "multiprocessing", "threading", "pickle", "dill", "joblib", "marshal",
-                  "requests", "urllib", "http", "ftplib", "smtplib", "tempfile", "glob", "io", "gc"}
+                  "requests", "urllib", "http", "ftplib", "smtplib", "tempfile", "glob", "gc"}
+# io is allowed only for in-memory buffers, e.g. decoding fetched bytes.
+IO_ALLOWED = {"BytesIO", "StringIO"}
 
 
 class MissingLibrary(ValueError):
@@ -162,6 +204,9 @@ MUTATORS = {"update", "append", "extend", "setdefault", "add", "insert", "pop", 
 
 # Inside custom estimator classes, fitting and torch's model.eval() are allowed.
 CLASS_ALLOWED = {"fit", "fit_transform", "eval"}
+OPAQUE_FUNCTION = ("Opaque function node: use fine-grained DataOps and library functions, not functions "
+                   "defined in the plan (except file readers named read_*); put training and other "
+                   "fitted logic in an estimator or module class")
 FORBIDDEN = {"deferred", "eval", "exec", "preview", "get_data", "set_data", "get_vars",
              "make_grid_search", "make_randomized_search", "make_learner", "with_scoring",
              "cross_validate", "iter_cv_splits", "train_test_split", "subsample",
@@ -222,21 +267,37 @@ def validate_source(source):
     in_class = {id(n) for c in ast.walk(tree) if isinstance(c, ast.ClassDef)
                 for m in c.body for n in ast.walk(m)}
     check_no_shared_state(tree)
+    # Plan-defined functions run in the graph only as file readers; checked first because
+    # it decides the plan's structure.
+    module_functions = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"apply_func", "apply"}):
+            for arg in node.args[:1]:
+                if isinstance(arg, ast.Name) and arg.id in module_functions and not arg.id.startswith("read_"):
+                    raise ValueError(f"{node.func.attr}({arg.id}): {OPAQUE_FUNCTION}")
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
+            if node.module == "io" and any(a.name not in IO_ALLOWED for a in node.names):
+                raise ValueError("From io only BytesIO and StringIO may be imported (in-memory buffers)")
             if any(a.name == "FunctionTransformer" for a in node.names):
                 raise ValueError("Custom function transformers are not supported")
         if isinstance(node, ast.ClassDef):
             methods = {m.name for m in node.body if isinstance(m, ast.FunctionDef)}
-            if not ("fit" in methods or "forward" in methods or {"split", "get_n_splits"} <= methods):
+            if not (methods & {"fit", "forward", "__getitem__", "train_step", "infer"}
+                    or any(m.startswith("on_") for m in methods) or {"split", "get_n_splits"} <= methods):
                 raise ValueError(f"Class {node.name}: custom classes are estimators/transformers (fit), "
-                                 "torch modules (forward) or CV splitters (split, get_n_splits); "
+                                 "torch modules (forward), torch Datasets (__getitem__), skorch nets or "
+                                 "callbacks (train_step, infer, on_* hooks) or CV splitters (split, "
+                                 "get_n_splits); "
                                  "write other logic as fine-grained DataOps")
             if node.keywords or node.decorator_list or not all(
                     isinstance(b, (ast.Name, ast.Attribute)) for b in node.bases):
                 raise ValueError(f"Class {node.name}: custom classes take plain base classes "
                                  "(e.g. BaseEstimator, TransformerMixin, nn.Module), no metaclass or decorators")
         if isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name) and node.value.id == "io" and node.attr not in IO_ALLOWED:
+                raise ValueError("Only io.BytesIO and io.StringIO are allowed (in-memory buffers)")
             if id(node) in in_class:
                 # Estimator internals: fitting, private state, torch's model.eval() and
                 # public parameters stored on self (e.g. LightGBM's self.subsample).
@@ -248,11 +309,14 @@ def validate_source(source):
                 if not allowed and (node.attr.startswith("_") or node.attr in FORBIDDEN):
                     raise ValueError(f"Unsupported operation in class: {node.attr}")
             elif node.attr.startswith("_") or node.attr in FORBIDDEN:
-                raise ValueError(f"Unsupported opaque or harness-owned operation: {node.attr}")
+                raise ValueError(f"Unsupported opaque or harness-owned operation: {node.attr}" + (
+                    "; training and inference (including torch's model.eval()) belong inside an "
+                    "estimator or module class" if node.attr in CLASS_ALLOWED else ""))
         if isinstance(node, ast.Name) and id(node) not in literal_getattr and (node.id.startswith("__") or node.id in
                 {"open", "eval", "exec", "compile", "getattr", "setattr", "globals", "locals", "vars", "FunctionTransformer"}
                 or (node.id == "print" and id(node) not in in_class)):
-            raise ValueError(f"Unsupported name: {node.id}")
+            raise ValueError(f"Unsupported name: {node.id}" + (
+                "; set attributes inside an estimator or module class" if node.id == "setattr" else ""))
         if isinstance(node, ast.Call):
             name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
             if is_eager_read(node):
@@ -280,7 +344,9 @@ def validate_source(source):
                 if (isinstance(target, ast.Attribute) and id(target) not in in_class
                         and not (isinstance(target.value, ast.Name) and target.value.id == "self")):
                     raise ValueError("Set DataFrame columns with recorded .assign(col=...), not attribute "
-                                     "assignment (df.col = ...)")
+                                     "assignment (df.col = ...). Attribute assignment on other objects "
+                                     "(e.g. replacing a torch model's layer) belongs inside an estimator "
+                                     "or module class")
     return tree
 
 

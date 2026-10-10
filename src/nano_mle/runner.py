@@ -17,7 +17,7 @@ from .libraries import record_missing
 from .memory import Journal, memory
 from .prompts import chosen_prompts, digests, prompts
 from .plans import MissingLibrary, evaluation_source, resolve_source, validate_source
-from .search import policy, update_stats, valid
+from .search import Selection, policy, update_stats, valid
 from .store import Store, new_id
 from .submit import write_submission
 
@@ -299,6 +299,15 @@ class Runner:
             if (repair_number == self.budget.max_repairs or
                     (kind == "pipeline" and self.counts()["evaluations"] >= self.budget.max_evaluations)):
                 break
+            # A repair that cannot finish in the time left is not started: skip it when less
+            # time remains than the typical attempt of this kind in this run.
+            remaining = self.remaining_seconds()
+            typical = self.time_context()["typical_attempt_s"].get(record["id"].rsplit("_", 1)[0])
+            if remaining is not None and typical and remaining < typical:
+                self.store.event("repair_skipped", owner_id=record["id"], remaining_s=round(remaining),
+                                 typical_attempt_s=typical)
+                self.notify(f"  No repair: {round(remaining)} s left, a typical attempt takes {typical} s")
+                break
             summary = " ".join(result["error"].split())  # some messages start with a line break
             self.notify(f"  Repair {repair_number + 1}: {summary[:180]}")
             error = result.get("traceback", result["error"])
@@ -445,6 +454,14 @@ class Runner:
                                                          record["id"], scope))
             self.store.put("expansion", record)
             requested += 1
+        # Candidates the planner builds on become references, so the writer sees their code.
+        scored = {c["id"] for c in self.store.records("candidate") if c.get("status") == "ok"}
+        reused = [i for i in proposal.reference_ids
+                  if i in scored and i != selection.parent_id and i not in selection.reference_ids]
+        if reused:
+            selection = Selection(selection.parent_id, selection.reference_ids + reused)
+            scope = {**scope, "selection": selection}
+            record["reference_ids"] = selection.reference_ids
         record.update(proposal=proposal.model_dump(), finding_ids=[f["id"] for f in context.get("findings", [])
                                                                      if not f.get("superseded")])
         self.store.put("expansion", record)
