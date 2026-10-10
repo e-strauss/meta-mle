@@ -3,7 +3,10 @@ engine/node_selection.py, engine/evaluation.py, engine/conditions.py).
 
 Adapted to a sequential harness with peeked, side-effect-free selection:
 - Search nodes are candidates; a grid's variants are sibling nodes, and child limits
-  count expansions (batches), not variants.
+  count expansions (batches), not variants. Stagnation and patience count expansions
+  too, each represented by its best variant: a MLEvolve node is one solution, so a
+  grid's weaker variants must not count as non-improving attempts. The other variants
+  stay in the graph and can be selected.
 - A branch is the subtree of one child of root (a draft or an aggregation).
 - Improvement chains: after an expansion the search continues from its best new
   candidate (`state["chain"]`), as MLEvolve continues from the result node, until a
@@ -40,6 +43,16 @@ def branches(candidates):
             cursor = lookup[cursor["parent_id"]]
         result[candidate["id"]] = cursor["id"]
     return result
+
+
+def per_expansion(candidates):
+    """One candidate per expansion, in order: its best valid variant, else its first."""
+    chosen = {}
+    for c in candidates:
+        best = chosen.get(c["batch_id"])
+        if best is None or (ok(c) and (not ok(best) or c["score"] > best["score"])):
+            chosen[c["batch_id"]] = c
+    return list(chosen.values())
 
 
 def ok(candidate):
@@ -146,8 +159,8 @@ class MLEvolve:
         return chosen
 
     def branch_stagnant(self, branch_id, candidates, branch, threshold):
-        """The branch best is not reached by any of its last `threshold` valid candidates."""
-        successes = [c for c in candidates if ok(c) and branch[c["id"]] == branch_id]
+        """The branch best is not reached by any of its last `threshold` valid expansions."""
+        successes = [c for c in per_expansion(candidates) if ok(c) and branch[c["id"]] == branch_id]
         if not successes:
             return False
         best = max(c["score"] for c in successes)
@@ -155,7 +168,8 @@ class MLEvolve:
         return len(recent) >= 2 and all(c["score"] < best for c in recent)
 
     def globally_stagnant(self, candidates):
-        """No new global best among the last `stagnation_window` candidates."""
+        """No new global best among the last `stagnation_window` expansions."""
+        candidates = per_expansion(candidates)
         if len(candidates) < self.stagnation_window:
             return False
         before = [c["score"] for c in candidates[:-self.stagnation_window] if ok(c)]

@@ -83,6 +83,20 @@ def test_stagnant_branches_evolve_or_later_fuse_with_other_branches():
     assert fused.reference_ids == ["d0"]
 
 
+def test_stagnation_counts_expansions_by_their_best_variant():
+    # Two expansions, each with a weaker variant: one non-improving expansion, not three.
+    candidates = drafts(2) + [c("a1", "d1", 0.5, batch="e1"), c("a1b", "d1", 0.4, batch="e1"),
+                              c("a2", "d1", 1.5, batch="e2"), c("a2b", "d1", 0.3, batch="e2"),
+                              c("a3", "a2", 1.2, batch="e3"), c("a3b", "a2", 1.1, batch="e3")]
+    branch = branches(candidates)
+    policy = MLEvolve(max_steps=40)
+    assert not policy.branch_stagnant("d1", candidates, branch, 3)
+    assert patience(candidates, "a3") == (1, 1, 1.5)
+    more = candidates + [c("a4", "a3", 1.0, batch="e4"), c("a5", "a4", 1.0, batch="e5")]
+    assert policy.branch_stagnant("d1", more, branches(more), 3)
+    assert {"a1b", "a2b", "a3b"} <= set(branches(more))  # weaker variants stay in the graph
+
+
 def test_global_stagnation_aggregates_the_best_of_each_branch():
     candidates = drafts(5) + [c("e1", "d4", 4.0), c("e2", "d3", 3.0), c("e3", "d4", 3.5), c("e4", "d3", 2.5),
                               c("e5", "e1", 3.9)]

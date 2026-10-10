@@ -63,11 +63,12 @@ def trajectory(candidates, parent_id, steps=10):
 
 def patience(candidates, parent_id):
     """MLEvolve's patience counters on the parent's branch: valid candidates and all
-    candidates created since the branch best (agents/triggers.py)."""
-    from .mlevolve import branches, ok
+    candidates created since the branch best (agents/triggers.py), counted in
+    expansions (each its best variant)."""
+    from .mlevolve import branches, ok, per_expansion
 
     branch = branches(candidates)
-    members = [c for c in candidates if branch[c["id"]] == branch[parent_id]]
+    members = [c for c in per_expansion(candidates) if branch[c["id"]] == branch[parent_id]]
     successes = [c for c in members if ok(c)]
     if not successes:
         return 0, len(members), None
