@@ -27,6 +27,17 @@ def table_summary(frame, rows=None):
             "columns": columns, "head": frame.head(HEAD_ROWS).astype(str).to_dict(orient="records")}
 
 
+def listing(location):
+    """Files under a directory (local or remote), relative to it; None for a file."""
+    import fsspec
+
+    fs, root = fsspec.core.url_to_fs(location)
+    if not fs.isdir(root):
+        return None
+    root = root.rstrip("/")
+    return sorted(path[len(root) + 1:] for path in fs.find(root))
+
+
 def summarize(location):
     import pandas as pd
     import pyarrow.dataset as ds
@@ -35,23 +46,20 @@ def summarize(location):
     if lowered.endswith((".csv", ".tsv", ".csv.gz", ".tsv.gz", ".txt")):
         sep = "\t" if ".tsv" in lowered else ","
         return {"format": "csv", **table_summary(pd.read_csv(location, sep=sep, nrows=SAMPLE_ROWS))}
-    if lowered.endswith(".parquet") or "://" in location or Path(location).is_dir():
-        try:
-            dataset = ds.dataset(location, format="parquet")
-            sample = dataset.head(SAMPLE_ROWS).to_pandas()
-            return {"format": "parquet", **table_summary(sample, dataset.count_rows())}
-        except Exception:
-            if "://" in location or not Path(location).is_dir():
-                raise
-    path = Path(location)
-    if path.is_dir():
-        files = [p for p in path.rglob("*") if p.is_file()]
+    files = listing(location)
+    if lowered.endswith(".parquet") or (files and all(f.endswith(".parquet") for f in files)):
+        dataset = ds.dataset(location, format="parquet")
+        return {"format": "parquet", **table_summary(dataset.head(SAMPLE_ROWS).to_pandas(), dataset.count_rows())}
+    if files is not None:
         extensions = {}
-        for p in files:
-            extensions[p.suffix.lower() or "(none)"] = extensions.get(p.suffix.lower() or "(none)", 0) + 1
-        return {"format": "directory", "files": len(files), "extensions": extensions,
-                "examples": [str(p.relative_to(path)) for p in files[:HEAD_ROWS]]}
-    return {"format": path.suffix.lower() or "file", "bytes": path.stat().st_size}
+        for f in files:
+            suffix = Path(f).suffix.lower() or "(none)"
+            extensions[suffix] = extensions.get(suffix, 0) + 1
+        return {"format": "directory", "files": len(files), "extensions": extensions, "examples": files[:HEAD_ROWS]}
+    import fsspec
+
+    fs, path = fsspec.core.url_to_fs(location)
+    return {"format": Path(path).suffix.lower() or "file", "bytes": fs.size(path)}
 
 
 def data_overview(sources):
