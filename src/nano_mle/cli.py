@@ -49,7 +49,7 @@ def main():
                       help="Agent profile: default component choices; explicit flags override")
     init.add_argument("--controller", choices=["llm", "auto"],
                       help="Next-action strategy (default: llm); auto expands after evaluation is locked")
-    init.add_argument("--policy", choices=["greedy", "draft-greedy", "aide", "mcts", "mcgs", "mlevolve"],
+    init.add_argument("--policy", choices=["greedy", "draft-greedy", "aide", "mcts", "mcgs", "mlevolve", "islands"],
                       help="Parent selection (default: greedy)")
     init.add_argument("--memory", choices=["window", "full", "aide", "experience"],
                       help="What model calls see of the run's history; parameters in nano-mle.toml [memory.<name>]")

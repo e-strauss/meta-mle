@@ -19,4 +19,10 @@ PROFILES = {
     "mlevolve": {"controller": "auto", "policy": "mlevolve", "memory": "experience", "prompts": "lean",
                  "max_explorations": 0, "max_requested_explorations": 0, "data_overview": True,
                  "interpreter": False, "planner": True},
+    # FM Agent (arXiv 2510.26144): diverse cold start, island evolution with adaptive
+    # sampling, crossover, migration and model fusion. The paper gives no parameters;
+    # see fm.py for our defaults. External knowledge (RAG) is a TODO.
+    "fm-agent": {"controller": "auto", "policy": "islands", "memory": "window", "prompts": "lean",
+                 "max_explorations": 0, "max_requested_explorations": 0, "data_overview": True,
+                 "interpreter": False, "planner": True},
 }

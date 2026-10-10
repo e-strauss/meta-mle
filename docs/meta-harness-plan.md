@@ -4,7 +4,7 @@ nano-mle becomes a meta-harness: each MLE agent is a **profile**, a composition 
 shared components, instead of a custom harness. Agents are reproduced in their
 core ideas, adapted to Skrub plans; deviations are documented per profile.
 
-Status: Phases 0-3 done (2026-10-10); Phase 2 tried once (APTOS, 2 h), Phase 3 untested on real tasks. Work across several sessions; tick phases off here.
+Status: Phases 0-4 done (2026-10-10); Phase 2 tried once (APTOS, 2 h), Phase 3 untested on real tasks. Work across several sessions; tick phases off here.
 
 ## Fixed (never per profile)
 
@@ -147,11 +147,15 @@ Tasks:
 - [ ] Validate on a real task run.
 
 ### Phase 4: FM-Agent profile
-- [ ] Island policy: N islands, diversity-aware selection, migration every M
-      expansions; islands and elites in `workflow_state`, sequential.
-- [ ] `crossover` (two parents, combine blocks) and `ensemble`/fusion operators.
-- [ ] Diverse cold start (drafts with distinct families per island).
-- [ ] Knowledge: TODO (web/RAG, provider undecided); profile runs with `none`.
+The paper (arXiv 2510.26144) gives mechanisms but no parameters, prompts or code;
+our defaults are documented in `fm.py` and the README.
+- [x] Island policy (`islands`): islands evolved in turn, diversity-adaptive rank
+      sampling, migration every 6 expansions (ring); state in `workflow_state`.
+- [x] `crossover`, `mutate` and `ensemble` (fusion) operators.
+- [x] Diverse cold start (one draft per island).
+- [x] `fm-agent` profile (lean prompts, planner, window memory, data overview).
+- [ ] Knowledge: TODO (web/RAG, provider undecided).
+- [ ] Validate on a real task run.
 
 ### Phase 5: MLE-STAR profile
 - [ ] Staged workflow: retrieve models -> draft per model -> merge -> rounds of

@@ -141,8 +141,39 @@ class Debug(Operator):
         return {"debug": {"error": parent.get("error"), "description": parent.get("description")}}
 
 
+class Mutate(Operator):
+    """FM Agent's mutation: one change to the parent, the elite pool's best (the
+    selection's references) as inspiration."""
+    name = "mutate"
+    parent = "candidate"
+    instruction = ("Propose one change to the parent whose effect on the score can be measured. The "
+                   "references are strong candidates of the population: use them as inspiration, not as "
+                   "code to copy.")
+
+
+class Crossover(Operator):
+    """FM Agent's crossover: a child of the parent and a candidate from another island."""
+    name = "crossover"
+    parent = "candidate"
+    instruction = ("Cross the parent with the reference, a strong candidate from another island: keep the "
+                   "parent's pipeline and bring in the reference's block (named block) that complements it "
+                   "most, so the child inherits from both. Say which blocks come from which parent.")
+
+
+class Ensemble(Operator):
+    """FM Agent's adaptive model fusion: one plan that rebuilds the parent's and the
+    references' models and combines their predictions (refits every member)."""
+    name = "ensemble"
+    parent = "candidate"
+    instruction = ("Fuse the parent and the references into one ensemble pipeline: rebuild their feature "
+                   "and model blocks in this plan and combine their predictions (weighted average, voting "
+                   "or stacking with weights fitted inside the training folds). Every member is refitted, "
+                   "so keep the members that add the most and fit the remaining time.")
+
+
 OPERATORS = {"free": Operator, "draft": Draft, "improve": Improve, "evolve": Evolve, "fuse": Fuse,
-             "aggregate": Aggregate, "debug": Debug}
+             "aggregate": Aggregate, "debug": Debug, "mutate": Mutate, "crossover": Crossover,
+             "ensemble": Ensemble}
 
 
 def operator(name):

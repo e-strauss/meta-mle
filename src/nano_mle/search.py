@@ -161,10 +161,12 @@ class MCGS(MCTS):
 
 def policy(name, max_steps, params=None):
     from .mlevolve import MLEvolve
+    from .fm import Islands
 
     return {"greedy": Greedy, "draft-greedy": DraftGreedy, "aide": Aide, "mcts": MCTS,
             "mcgs": lambda **kwargs: MCGS(max_steps, **kwargs),
-            "mlevolve": lambda **kwargs: MLEvolve(max_steps, **kwargs)}[name](**(params or {}))
+            "mlevolve": lambda **kwargs: MLEvolve(max_steps, **kwargs),
+            "islands": lambda **kwargs: Islands(max_steps, **kwargs)}[name](**(params or {}))
 
 
 def update_stats(stats, candidates, new_candidates, baseline):

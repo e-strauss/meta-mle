@@ -194,6 +194,22 @@ Adapted or omitted: embedding retrieval (lexical only), forced backpropagation,
 the cold-start knowledge base, the code-review and leakage agents, diff-mode code
 edits, parallel workers.
 
+**`fm-agent`**, after the [FM Agent paper](https://arxiv.org/html/2510.26144). The
+paper describes the mechanisms but gives no parameters, prompts or code, so the
+numbers are ours:
+
+| FM Agent | nano-mle |
+|---|---|
+| Cold start: parallel generation agents with different directions | `num_islands * drafts_per_island` drafts (3 × 1), each told to differ from the others |
+| Islands, partitioned by similarity, evolving mostly independently | `islands` policy: drafts assigned in turn, islands evolved in turn, a child joins its parent's island |
+| Adaptive, cluster-based sampling by semantic and structural diversity | rank sampling with weights exp(-β·rank), β from 0.1 to 1.5 with the island's mean Jaccard distance of description, configuration and block tokens; no clustering |
+| Mutation and crossover | `mutate` (elite pool as inspiration), `crossover` with probability 0.3 (parent + another island's elite) |
+| Periodic interaction between islands | migration every 6 expansions: each island's best joins the next island |
+| Elite pool | the 5 best valid candidates |
+| Adaptive model fusion (ensembles, stacking) for ML tasks | `ensemble` operator after 75 % of the run, probability 0.25, at most 2 |
+| Evaluator with LLM-judge feedback; human feedback module; RAG knowledge | omitted (knowledge: TODO) |
+| Ray-distributed workers | sequential |
+
 ### Prompt sets
 
 The instructions of the controller, planner, writer and repairer come from a prompt
@@ -610,6 +626,12 @@ Candidates are search nodes; explorations and findings are evidence and carry no
   stagnation, `improve` otherwise. Its parameters are in `[policy.mlevolve]`; the
   module docstring of `mlevolve.py` lists what is adapted.
 
+- `islands` follows [FM Agent](https://arxiv.org/html/2510.26144)'s island evolution:
+  a cold start of one draft per island, islands evolved in turn, rank sampling whose
+  pressure grows with the island's diversity, `crossover` with another island's
+  elite, otherwise `mutate`, migration of each island's best to the next, and late
+  `ensemble` fusion. Parameters in `[policy.islands]`; see `fm.py`.
+
 `mcgs` is an earlier, smaller sketch of MLEvolve, kept for existing workspaces.
 
 **Rewards.** Every scored variant is one observation:
@@ -640,7 +662,10 @@ selected or submitted).
 | `evolve` | a candidate | `mlevolve` on a stagnant branch: a change supported by the branch's trajectory (`context.evolution`); a larger change on a plateau |
 | `fuse` | a candidate | `mlevolve` on a stagnant branch after half the run: adopt one technique from other branches' best candidates (references) |
 | `aggregate` | root | `mlevolve` under global stagnation: a new pipeline from the best candidate of each branch (`context.aggregation`) |
-| `debug` | a failed candidate | `mlevolve`: a minimal fix of a failure the inner repairs left (`context.debug`) |
+| `debug` | a failed candidate | `mlevolve`, `aide`: a minimal fix of a failure the inner repairs left (`context.debug`) |
+| `mutate` | a candidate | `islands`: one change, the elite pool as inspiration (references) |
+| `crossover` | a candidate | `islands`: a child of the parent and another island's elite (reference), combining named blocks |
+| `ensemble` | a candidate | `islands`, late in the run: one plan that rebuilds the parent's and the references' models and combines their predictions; every member is refitted |
 
 A policy may name the operator in its selection; `auto` follows it, and the LLM
 controller sees it in `next_expansion_parent`.
