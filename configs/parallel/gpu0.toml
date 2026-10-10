@@ -1,0 +1,44 @@
+# nano-mle configuration. Copy to nano-mle.toml (gitignored) and adjust.
+# Without nano-mle.toml these defaults apply. NANO_MLE_CONFIG points to another file.
+# Each run records the configuration it used in its workspace metadata.
+
+[execution]
+# Cores the workers may use; 0 means all. Workers are pinned to the first cpu_threads
+# cores, so this holds even when a plan sets n_jobs=-1, and concurrent runs share them.
+cpu_threads = 8
+# Grid-search variants/folds fitted in parallel processes. Each parallel fit gets
+# cpu_threads // grid_n_jobs threads. Every job receives its own copy of X and y,
+# so values above 1 only pay off for small data with many cheap fits. Probes always
+# fit folds sequentially with all threads.
+grid_n_jobs = 1
+
+[plans]
+# Restrict apply_func / call nodes to the curated list of library primitives in
+# graphs.PRIMITIVES. Disabled for now so the agent may call any library function;
+# functions defined in the plan and lambdas are rejected either way (no UDFs).
+restrict_primitives = false
+
+[prompts]
+# Add the "data volume study" convention (planner and controller): for large sources,
+# decide the modelled population with evidence, i.e. explore which rows and table
+# parts are needed before the lock and measure a learning curve after it.
+data_volume_study = true
+
+# Memory parameters, read at `nano-mle init --memory <name>` and recorded in the
+# workspace. Omitted keys use the defaults shown.
+[memory.window]
+# leaderboard = 8     # best candidates shown
+# explorations = 4    # latest explorations shown, with their output previews
+# failures = 4        # latest failed candidates shown
+# trajectory = 6      # ancestors of the selected parent shown
+
+[memory.full]
+# max_chars = 400000  # JSON size cap; oldest explorations, then failures, then
+#                     # lowest-ranked candidates are omitted beyond it
+
+[hardware]
+memory_gb = 240
+gpus = ["NVIDIA A100-SXM4-80GB"]
+
+[policy.draft-greedy]
+num_drafts = 4
