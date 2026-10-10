@@ -4,7 +4,7 @@ nano-mle becomes a meta-harness: each MLE agent is a **profile**, a composition 
 shared components, instead of a custom harness. Agents are reproduced in their
 core ideas, adapted to Skrub plans; deviations are documented per profile.
 
-Status: Phases 0-2 done (2026-10-10); Phase 2 untested on real tasks. Work across several sessions; tick phases off here.
+Status: Phases 0-3 done (2026-10-10); Phase 2 tried once (APTOS, 2 h), Phase 3 untested on real tasks. Work across several sessions; tick phases off here.
 
 ## Fixed (never per profile)
 
@@ -139,10 +139,12 @@ Tasks:
 - [ ] Later: embedding retrieval, forced backpropagation, cold-start KB.
 
 ### Phase 3: AIDE profile
-- [ ] `debug` operator on failed leaves (after inner repairs).
-- [ ] `aide` policy: `num_drafts`, `debug_prob`, `max_debug_depth`, else greedy.
-- [ ] Profile: auto workflow, static overview, aide memory, no explore/probe.
-- [ ] Re-read the AIDE paper; document remaining differences (planner split).
+- [x] `debug` operator on failed leaves (after inner repairs).
+- [x] `aide` policy: `num_drafts`, `debug_prob`, `max_debug_depth`, else greedy.
+- [x] Profile: auto workflow, static overview, aide memory, no explore/probe,
+      no planner (the writer's module docstring describes the candidate).
+- [x] Re-read the AIDE code (`~/repos/aideml`); fidelity table in the README.
+- [ ] Validate on a real task run.
 
 ### Phase 4: FM-Agent profile
 - [ ] Island policy: N islands, diversity-aware selection, migration every M

@@ -28,6 +28,19 @@ class ModelCallBudgetExceeded(RuntimeError):
     pass
 
 
+PLAN_DOCSTRING = ("Begin the source with a module docstring of 3-5 sentences: the solution, or the change "
+                  "to the parent, and why. It becomes the candidate's description in later contexts.")
+
+
+def docstring(path):
+    import ast
+
+    try:
+        return ast.get_docstring(ast.parse(path.read_text()))
+    except (OSError, SyntaxError):
+        return None
+
+
 class UnavailableAction(ValueError):
     """The controller chose an action the budgets, the lock or the profile do not permit."""
 
@@ -548,7 +561,17 @@ class Runner:
         record.update(proposal=proposal.model_dump(), finding_ids=[f["id"] for f in context.get("findings", [])
                                                                      if not f.get("superseded")])
         self.store.put("expansion", record)
-        result, attempt = self.execute("pipeline", record, scope, proposal.model_dump())
+        intent = proposal.model_dump()
+        if not self.switches["planner"]:
+            intent["plan_docstring"] = PLAN_DOCSTRING
+        result, attempt = self.execute("pipeline", record, scope, intent)
+        if not self.switches["planner"]:
+            # The writer's own plan describes the candidate, as the plan text of a
+            # combined plan-and-code call does in AIDE.
+            written = docstring(self.workspace / attempt["path"] / "plan.py")
+            if written:
+                proposal = proposal.model_copy(update={"description": written})
+                record["proposal"] = proposal.model_dump()
         record.update(status=result["status"], result=result)
         if result.get("warning") == "contract_drift":
             record.update(status="rejected", candidate_ids=[])

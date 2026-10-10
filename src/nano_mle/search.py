@@ -61,6 +61,45 @@ class DraftGreedy(Greedy):
         return Selection("root", []) if step < self.num_drafts else super().select(candidates, stats, step, state, progress)
 
 
+class Aide:
+    """AIDE's search policy (aide/agent.py, search_policy): draft until `num_drafts`
+    drafts exist (failed ones count); then, with probability `debug_prob`, debug a
+    random failed leaf whose debug depth is at most `max_debug_depth`; else improve
+    the best valid candidate, or draft when none is valid. Random draws are seeded by
+    the step, so a peek and the selection agree."""
+
+    name = "aide"
+
+    def __init__(self, num_drafts=5, debug_prob=0.5, max_debug_depth=3, seed=42):
+        self.num_drafts, self.debug_prob, self.max_debug_depth, self.seed = (
+            num_drafts, debug_prob, max_debug_depth, seed)
+
+    def debug_depth(self, candidate, lookup):
+        """Consecutive failed ancestors: 0 unless the parent failed."""
+        depth, cursor = 0, candidate
+        while cursor["parent_id"] != "root" and lookup[cursor["parent_id"]]["status"] != "ok":
+            depth += 1
+            cursor = lookup[cursor["parent_id"]]
+        return depth
+
+    def select(self, candidates, stats, step, state=None, progress=None):
+        rng = random.Random(self.seed + step)
+        drafts = {c["batch_id"] for c in candidates if c["parent_id"] == "root"}
+        if len(drafts) < self.num_drafts:
+            return Selection("root", [], operator="draft")
+        if rng.random() < self.debug_prob:
+            lookup = {c["id"]: c for c in candidates}
+            parents = {c["parent_id"] for c in candidates}
+            debuggable = [c for c in candidates if c["status"] != "ok" and c["id"] not in parents
+                          and self.debug_depth(c, lookup) <= self.max_debug_depth]
+            if debuggable:
+                return Selection(rng.choice(debuggable)["id"], [], operator="debug")
+        choices = valid(candidates)
+        if not choices:
+            return Selection("root", [], operator="draft")
+        return Selection(max(choices, key=lambda c: c["score"])["id"], [], operator="improve")
+
+
 class MCTS:
     """UCT over a primary tree with progressive widening; no separate rollouts."""
 
@@ -123,7 +162,7 @@ class MCGS(MCTS):
 def policy(name, max_steps, params=None):
     from .mlevolve import MLEvolve
 
-    return {"greedy": Greedy, "draft-greedy": DraftGreedy, "mcts": MCTS,
+    return {"greedy": Greedy, "draft-greedy": DraftGreedy, "aide": Aide, "mcts": MCTS,
             "mcgs": lambda **kwargs: MCGS(max_steps, **kwargs),
             "mlevolve": lambda **kwargs: MLEvolve(max_steps, **kwargs)}[name](**(params or {}))
 

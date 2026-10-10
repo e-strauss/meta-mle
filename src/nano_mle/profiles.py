@@ -7,9 +7,12 @@ plans and the locked evaluation; its documentation lists what is adapted or omit
 """
 
 PROFILES = {
-    # AIDE-like drafting and greedy improvement (see README, Agent configurations).
-    "aide": {"controller": "auto", "policy": "draft-greedy", "memory": "aide",
-             "max_requested_explorations": 0},
+    # AIDE (arXiv 2502.13138): drafts, random debugging of failed leaves, greedy
+    # improvement; one call plans and codes (no planner); a static data preview, no
+    # EDA. See README, Agent configurations, for what is adapted.
+    "aide": {"controller": "auto", "policy": "aide", "memory": "aide", "prompts": "lean",
+             "max_explorations": 0, "max_requested_explorations": 0, "data_overview": True,
+             "interpreter": False, "planner": False},
     # MLEvolve (arXiv 2606.06473): no EDA, a static data preview, progressive MCGS
     # with stagnation-driven operators and retrospective memory. See
     # docs/meta-harness-plan.md (Phase 2) for what is adapted and omitted.

@@ -14,7 +14,7 @@ from test_controllers import ExperimentBackend, workspace
 
 @pytest.mark.parametrize("flags,controller,policy,memory,requested", [
     ([], "llm", "greedy", "window", 2),
-    (["--preset", "aide"], "auto", "draft-greedy", "aide", 0),
+    (["--preset", "aide"], "auto", "aide", "aide", 0),
     (["--preset", "aide", "--controller", "llm", "--policy", "greedy", "--memory", "window",
       "--max-requested-explorations", "2"], "llm", "greedy", "window", 2),
     (["--memory", "full", "--policy", "mcts", "--preset", "aide"], "auto", "mcts", "full", 0),

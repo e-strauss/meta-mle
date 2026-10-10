@@ -161,19 +161,38 @@ It excludes model calls, so it cannot guarantee the next expansion fits. With no
 worker timeouts still bound it. Action, model-call and wall-time budgets can end a
 run before its expansion limit.
 
-This is an **AIDE-like drafting and greedy-improvement configuration, adapted to
-Skrub DataOps and harness-locked evaluation**, following the
-[AIDE paper](https://arxiv.org/html/2502.13138v1). It retains separate planner/writer
-calls, immediate repairs inside an expansion, harness scoring, parameter grids,
-and final submission. It omits AIDE's probabilistic debugging of failed tree nodes
-and per-program LLM reviews. AIDE's `max_debug_depth` counts a debug path across
-search steps; our `max_repairs` limits repairs inside one expansion and is not an
-equivalent setting. Grids create several candidates per expansion, so choose an
-evaluation budget large enough for them. The profile disables planner-requested
-explorations; a request is rejected and its failed expansion still counts.
-`[prompts.default] data_volume_study` is a prompt setting, not part of the profile; its
-learning-curve convention can take up a draft, so disable it in a separate config
-for runs meant to be closer to AIDE.
+#### Profile fidelity
+
+Each profile reproduces its agent's search and memory mechanisms; every profile
+shares the Skrub plans, the harness-locked evaluation (one setup, locked before the
+search, instead of a split written by each solution), the inner repair loop and
+sequential execution. Accurate wording is "the agent's mechanisms, adapted", not a
+reimplementation.
+
+**`aide`**, after the [AIDE paper](https://arxiv.org/html/2502.13138v1) and its code
+(`aide/agent.py`):
+
+| AIDE | nano-mle |
+|---|---|
+| Data preview, "Don't suggest to do EDA" | `--data-overview`, no explorations, no interpreter |
+| Draft until 5 drafts (failed ones count) | `aide` policy, `num_drafts = 5` |
+| With probability 0.5, debug a random buggy leaf with debug depth <= 3 | `debug_prob = 0.5`, `max_debug_depth = 3`, `debug` operator; the inner repairs run first |
+| Otherwise improve the best node; draft when none is good | same (`improve`, `draft`) |
+| One call writes a 3-5 sentence plan and the code | no planner; the writer's module docstring becomes the candidate's description |
+| Draft: simple, no ensembling or tuning, different from memory; improve: one atomic change | `draft` and `improve` operator instructions, `lean` prompts |
+| Memory: design, results and metric of every good node | `aide` memory: description, configuration and score of every valid candidate, plus failed drafts |
+| An LLM review reads the output: bug flag, metric, summary | omitted: the harness scores on the locked folds and knows failures from errors |
+| Each solution writes a hold-out or 5-fold evaluation | the locked evaluation |
+
+Grids create several candidates per expansion, so choose an evaluation budget large
+enough for them.
+
+**`mlevolve`**, after the [MLEvolve paper](https://arxiv.org/html/2606.06473) and its
+code: see the `mlevolve` policy under [Search](#search), the `experience` memory, and
+the mapping table in [docs/meta-harness-plan.md](docs/meta-harness-plan.md) (Phase 2).
+Adapted or omitted: embedding retrieval (lexical only), forced backpropagation,
+the cold-start knowledge base, the code-review and leakage agents, diff-mode code
+edits, parallel workers.
 
 ### Prompt sets
 
