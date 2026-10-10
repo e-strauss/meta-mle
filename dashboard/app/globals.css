@@ -23,7 +23,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #151517;
     --surface: #1c1c1f;
     --fg: #e8e8ea;
@@ -42,6 +42,26 @@
     --series-3: #199e70; --series-4: #c98500; --series-5: #d55181; --series-6: #9085e9;
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #151517;
+  --surface: #1c1c1f;
+  --fg: #e8e8ea;
+  --muted: #9a9aa0;
+  --border: #2e2e33;
+  --accent: #7ea6ec;
+  --badge: #2a2a2f;
+  --code-bg: #232327;
+  --chart-surface: #1a1a19;
+  --grid: #2c2c2a;
+  --seq-0: #184f95; --seq-1: #256abf; --seq-2: #3987e5; --seq-3: #6da7ec; --seq-4: #9ec5f4;
+  --neutral-node: #6b6a66;
+  --edge: #6f6e6a;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70; --series-4: #c98500; --series-5: #d55181; --series-6: #9085e9;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -67,6 +87,7 @@ pre.wrap { white-space: pre-wrap; word-break: break-word; }
 header.top { display: flex; align-items: center; gap: 18px; padding: 10px 20px; border-bottom: 1px solid var(--border);
   background: var(--surface); position: sticky; top: 0; z-index: 10; }
 header.top .brand { font-weight: 600; color: var(--fg); }
+.theme-select { display: inline-flex; align-items: center; gap: 6px; }
 main.page { padding: 16px 20px 60px; max-width: 1800px; margin: 0 auto; }
 
 table.list { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); }
@@ -104,12 +125,16 @@ input, select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px
 
 .tree-wrap { position: relative; background: var(--chart-surface); border: 1px solid var(--border); border-radius: 8px;
   height: 560px; overflow: hidden; touch-action: none; }
+.tree-wrap:fullscreen { width: 100vw; height: 100vh; border: 0; border-radius: 0; }
+.tree-wrap::backdrop { background: var(--chart-surface); }
 .tree-wrap svg { width: 100%; height: 100%; cursor: grab; user-select: none; }
 .tree-wrap svg:active { cursor: grabbing; }
 .tree-wrap text { fill: var(--fg); font-size: 12px; }
 .tree-wrap text.sub { fill: var(--muted); font-size: 11px; }
-.tree-controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
+.tree-controls { position: absolute; top: 8px; right: 8px; display: flex; flex-wrap: wrap; justify-content: flex-end;
+  gap: 4px; max-width: calc(100% - 16px); z-index: 1; }
 .tree-controls button { padding: 2px 8px; }
+.tree-error { position: absolute; bottom: 8px; left: 8px; background: var(--surface); padding: 4px 8px; border-radius: 6px; }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); margin: 6px 0; align-items: center; }
 .legend svg { vertical-align: middle; }
 .tooltip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);

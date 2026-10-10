@@ -47,6 +47,9 @@ From a laptop: `ssh -N -L 3200:localhost:3200 <node>` and open
 
 ## How it works
 
+- **Theme.** The header's Theme selector offers System, Light and Dark. The choice
+  is saved in a browser cookie and applied before the page renders. The bottom-left
+  Next.js menu controls only the development tools' appearance.
 - **Runs.** Every directory under a runs root that an adapter recognises is a run;
   its id is `<root name>/<path below root>`. A run is *live* when a process holds
   its lock file (read from `/proc/locks`); the model is read from that process's

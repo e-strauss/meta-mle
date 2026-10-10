@@ -68,12 +68,40 @@ export default function TreeView({ nodes, edges, selected, onSelect, bestId }: {
   const full = { x: -left, y: -pad, w: width + X_STEP * 0.6 + left, h: height + 2 * pad };
   const [view, setView] = useState<typeof full | null>(null);
   const v = view ?? full;
+  const treeRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ x: number; y: number; v: typeof full } | null>(null);
   const [hover, setHover] = useState<{ n: Placed; px: number; py: number } | null>(null);
   const [hidden, setHidden] = useState<Set<EdgeKind>>(new Set());
+  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreenAvailable, setFullscreenAvailable] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null);
   const inner = useMemo(() => new Set(nodes.map((n) => n.parent).filter(Boolean) as string[]), [nodes]);
   const best = bestId;
+
+  useEffect(() => {
+    setFullscreenAvailable(Boolean(document.fullscreenEnabled && treeRef.current?.requestFullscreen));
+    const onFullscreenChange = () => {
+      setFullscreen(document.fullscreenElement === treeRef.current);
+      setHover(null);
+      drag.current = null;
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    setFullscreenError(null);
+    try {
+      if (document.fullscreenElement === treeRef.current) {
+        await document.exitFullscreen();
+      } else {
+        await treeRef.current?.requestFullscreen();
+      }
+    } catch {
+      setFullscreenError("Could not change fullscreen mode. Please try again.");
+    }
+  };
 
   const toUnits = (dx: number, dy: number) => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -129,11 +157,16 @@ export default function TreeView({ nodes, edges, selected, onSelect, bestId }: {
           </label>
         ))}
       </div>
-      <div className="tree-wrap">
+      <div ref={treeRef} className="tree-wrap">
         <div className="tree-controls">
           <button onClick={() => zoom(0.8)} aria-label="Zoom in">+</button>
           <button onClick={() => zoom(1.25)} aria-label="Zoom out">−</button>
           <button onClick={() => setView(null)}>Fit</button>
+          <button onClick={toggleFullscreen} disabled={!fullscreenAvailable}
+            aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"} aria-pressed={fullscreen}
+            title={fullscreenAvailable ? (fullscreen ? "Exit fullscreen (Esc)" : "Show search tree fullscreen") : "Fullscreen is unavailable in this browser"}>
+            {fullscreen ? "Exit fullscreen" : "Fullscreen"}
+          </button>
           <span className="small muted" style={{ alignSelf: "center" }}>pinch or ⌘/Ctrl + scroll to zoom · drag to pan</span>
         </div>
         <svg ref={svgRef} viewBox={`${v.x} ${v.y} ${v.w} ${v.h}`} role="img" aria-label="Search tree"
@@ -191,6 +224,7 @@ export default function TreeView({ nodes, edges, selected, onSelect, bestId }: {
             </g>
           ))}
         </svg>
+        {fullscreenError && <div className="tree-error error small" role="alert">{fullscreenError}</div>}
         {hover && (
           <div className="tooltip" style={{ left: Math.min(hover.px + 14, 9999), top: hover.py + 14 }}>
             <div><b>{hover.n.label}</b> <span className="muted">{hover.n.kind} · {hover.n.status}</span></div>
