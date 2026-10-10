@@ -67,3 +67,20 @@ def test_provider_errors_become_model_unavailable_and_parse_errors_do_not():
         backend._call(timed_out)
     with pytest.raises(ValueError):
         backend._call(malformed)
+
+
+def test_roles_use_the_run_model_unless_the_config_names_another():
+    from nano_mle.agents import ROLES, role_models
+
+    same = role_models("gemini/gemini-3.8-flash", 64000, 600, "high", {})
+    assert {s["model"] for s in same.values()} == {"gemini/gemini-3.8-flash"} and set(same) == set(ROLES)
+    mixed = role_models("gemini/gemini-3.8-flash", 64000, 600, "high",
+                        {"writer": {"model": "openai/gpt-6.1-sol", "api_base": "http://127.0.0.1:1/v1"},
+                         "planner": {"reasoning_effort": "low"}})
+    assert mixed["writer"]["model"] == "openai/gpt-6.1-sol" and mixed["writer"]["reasoning_effort"] is None
+    assert mixed["planner"] == {**same["planner"], "reasoning_effort": "low"}
+    assert mixed["controller"] == same["controller"]
+    with pytest.raises(ValueError, match="Unknown roles"):
+        role_models("m", 1, 1, None, {"coder": {"model": "x"}})
+    with pytest.raises(ValueError, match="Unknown keys"):
+        role_models("m", 1, 1, None, {"writer": {"temperature": 0}})

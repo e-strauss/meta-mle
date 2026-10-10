@@ -73,3 +73,13 @@ exploration = 1.414
 # counted, so it is a heuristic. With no expansion history the first expansion is
 # allowed. 0 disables the estimate.
 time_margin = 1.0
+
+# Model per role. By default every role uses the run's --model (with its
+# --reasoning-effort, --max-tokens, --request-timeout). A [models.<role>] table
+# overrides it for one role; roles are controller, planner, writer, repairer,
+# interpreter, summarizer. Keys: model, reasoning_effort, max_tokens, timeout,
+# api_base. A role given another model does not inherit --reasoning-effort.
+# [models.writer]
+# model = "openai/gpt-6.1-sol"
+# reasoning_effort = "medium"
+# api_base = "http://127.0.0.1:10531/v1"

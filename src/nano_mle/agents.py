@@ -66,6 +66,33 @@ class Backend(Protocol):
     # Optional: use_prompts(prompt_set), called with the workspace's prompt set.
 
 
+ROLES = ("controller", "planner", "writer", "repairer", "interpreter", "summarizer")
+
+
+def model_label(model, reasoning_effort=None):
+    return model if not reasoning_effort else f"{model} (reasoning {reasoning_effort})"
+
+
+def role_models(model, max_tokens, timeout, reasoning_effort, overrides):
+    """Model settings per role: the run's model, unless nano-mle.toml [models.<role>]
+    names another. An override's omitted keys come from the run's settings, except
+    reasoning_effort, which belongs to the model and so falls back only with it."""
+    unknown = set(overrides) - set(ROLES)
+    if unknown:
+        raise ValueError(f"Unknown roles in [models]: {sorted(unknown)}; roles are {list(ROLES)}")
+    base = {"model": model, "max_tokens": max_tokens, "timeout": timeout, "reasoning_effort": reasoning_effort}
+    settings = {}
+    for role in ROLES:
+        given = overrides.get(role, {})
+        extra = set(given) - {*base, "api_base"}
+        if extra:
+            raise ValueError(f"Unknown keys in [models.{role}]: {sorted(extra)}")
+        if "model" in given and "reasoning_effort" not in given:
+            given = {**given, "reasoning_effort": None}
+        settings[role] = {**base, **given}
+    return settings
+
+
 class DSPyBackend:
     def __init__(self, model: str, max_tokens=64000, timeout=600, reasoning_effort=None):
         import os
@@ -73,12 +100,26 @@ class DSPyBackend:
         from dotenv import load_dotenv
 
         load_dotenv()
-        self.model = model if not reasoning_effort else f"{model} (reasoning {reasoning_effort})"
         dspy.configure_cache(enable_disk_cache=False, enable_memory_cache=False)
-        kwargs = lm_settings(model, max_tokens, timeout, reasoning_effort)
-        if model.startswith("gemini/"):
-            kwargs["api_key"] = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
-        self.lm = dspy.LM(model, **kwargs)
+        settings = role_models(model, max_tokens, timeout, reasoning_effort, load_config()["models"])
+        lms = {}  # roles with the same settings share one LM
+        self.lms = {}
+        for role, s in settings.items():
+            key = json.dumps(s, sort_keys=True)
+            if key not in lms:
+                kwargs = lm_settings(s["model"], s["max_tokens"], s["timeout"], s["reasoning_effort"])
+                if s.get("api_base"):
+                    kwargs["api_base"] = s["api_base"]
+                if s["model"].startswith("gemini/"):
+                    kwargs["api_key"] = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+                lms[key] = dspy.LM(s["model"], **kwargs)
+            self.lms[role] = lms[key]
+        self.lm = self.lms["controller"]
+        labels = {role: model_label(s["model"], s["reasoning_effort"]) for role, s in settings.items()}
+        default = model_label(model, reasoning_effort)
+        # One model keeps the plain label; mixed runs name the roles that differ.
+        self.model = default if all(l == default for l in labels.values()) else (
+            default + "; " + ", ".join(f"{r}: {l}" for r, l in labels.items() if l != default))
         self.usage = None
         self.dspy = dspy
         self.adapter = dspy.ChatAdapter(use_json_adapter_fallback=False)
@@ -132,30 +173,31 @@ class DSPyBackend:
         self.writer = self.dspy.Predict(self.signatures["writer"].with_instructions(texts["writer"]))
         self.repairer = self.dspy.Predict(self.signatures["repair"].with_instructions(texts["repair"]))
 
-    def _call(self, module, **kwargs):
+    def _call(self, module, role=None, **kwargs):
         # The LM history holds only this call's requests, so usage covers a failed parse too.
         from dspy.utils.exceptions import LMRateLimitError, LMServerError, LMTimeoutError, LMTransportError
 
-        self.lm.history.clear()
+        lm = getattr(self, "lms", {}).get(role, self.lm)
+        lm.history.clear()
         try:
-            with self.dspy.context(lm=self.lm, adapter=self.adapter):
+            with self.dspy.context(lm=lm, adapter=self.adapter):
                 return module(**{k: json.dumps(v) if isinstance(v, (dict, list)) else v for k, v in kwargs.items()})
         except (LMTransportError, LMTimeoutError, LMServerError, LMRateLimitError) as error:
             raise ModelUnavailable(str(error)) from error
         finally:
-            self.usage = usage_of(self.lm.history)
+            self.usage = usage_of(lm.history)
 
     def control(self, context):
-        return Decision.model_validate(self._call(self.controller, context=context).decision)
+        return Decision.model_validate(self._call(self.controller, "controller", context=context).decision)
 
     def plan(self, context):
-        return Proposal.model_validate(self._call(self.planner, context=context).proposal)
+        return Proposal.model_validate(self._call(self.planner, "planner", context=context).proposal)
 
-    def _code(self, module, field, **kwargs):
+    def _code(self, module, field, role, **kwargs):
         from dspy.utils.exceptions import AdapterParseError
 
         try:
-            return getattr(self._call(module, **kwargs), field)
+            return getattr(self._call(module, role, **kwargs), field)
         except AdapterParseError as error:
             source = bare_source(error.lm_response)
             if source is None:
@@ -163,15 +205,15 @@ class DSPyBackend:
             return source
 
     def implement(self, kind, context, intent):
-        return self._code(self.writer, "source", kind=kind, context=context, intent=intent)
+        return self._code(self.writer, "source", "writer", kind=kind, context=context, intent=intent)
 
     def repair(self, kind, context, intent, source, error):
-        return self._code(self.repairer, "fixed_source", kind=kind, context=context, intent=intent,
+        return self._code(self.repairer, "fixed_source", "repairer", kind=kind, context=context, intent=intent,
                           source=source, error=error)
 
     def interpret(self, context, question, result):
-        return [Finding.model_validate(f) for f in self._call(self.interpreter, context=context,
+        return [Finding.model_validate(f) for f in self._call(self.interpreter, "interpreter", context=context,
                                                             question=question, result=result).findings]
 
     def summarize(self, context, instruction):
-        return self._call(self.summarizer, context=context, instruction=instruction).summary
+        return self._call(self.summarizer, "summarizer", context=context, instruction=instruction).summary

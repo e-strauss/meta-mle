@@ -23,6 +23,8 @@ DEFAULTS = {
     "policy": {"greedy": {}, "draft-greedy": {"num_drafts": 5},
                "mcts": {"exploration": 1.414}, "mcgs": {"seed": 42, "exploration": 1.414}},
     "controller": {"llm": {}, "auto": {"time_margin": 1.0}},
+    # Model per role, e.g. [models.writer] model = "...": roles not named use the run's --model.
+    "models": {},
 }
 
 
@@ -48,10 +50,10 @@ def load_config() -> dict:
                                           "data_volume_study": given["data_volume_study"]}}
             del given["data_volume_study"]
         # Prompt sets are open: a registered variant may take parameters by its name.
-        extra = set(given) - set(values) if section != "prompts" else set()
+        extra = set(given) - set(values) if section not in ("prompts", "models") else set()
         if extra:
             raise ValueError(f"Unknown keys in [{section}] of {path}: {sorted(extra)}")
-        if section in ("memory", "policy", "controller", "prompts"):
+        if section in ("memory", "policy", "controller", "prompts", "models"):
             config[section] = {name: {**values.get(name, {}), **given.get(name, {})}
                                for name in {**values, **given}}
         else:
