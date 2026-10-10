@@ -181,6 +181,7 @@ Registered sets:
 |---|---|
 | `default` | The current conventions. |
 | `oct04` | The default set as of 2026-10-04, frozen for ablations: population filters compared only when the check shows a difference, no threshold; no training-objective convention; the controller sees the full model conventions and may name methods, which the planner follows; a plateau may end the run. |
+| `oct09` | The default set as of 2026-10-09 (third APTOS round), frozen for ablations: population check preferring the least restrictive rule, weighing lower AUC against lost training rows and normalising recording differences instead of dropping rows; frozen and fine-tuned pretrained models count as different families; the planner lists reused candidates in `reference_ids`. |
 
 ### CPU setup and parallel runs
 

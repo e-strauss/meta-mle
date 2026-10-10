@@ -44,6 +44,10 @@ def test_frozen_set_keeps_its_texts():
     digests = prompts.digests(prompts.prompts("oct04").rendered())
     assert {role: digests[role] for role in ("control", "planning")} == {
         "control": "36b6c24384650f6c", "planning": "95f580cd222261a0"}
+    # oct09 is the default set as of 2026-10-09, used by the third APTOS round.
+    digests = prompts.digests(prompts.prompts("oct09").rendered())
+    assert {role: digests[role] for role in ("control", "planning")} == {
+        "control": "e65232031b998189", "planning": "3b20a0d21550741b"}
 
 
 def test_controller_gets_goals_and_the_planner_chooses_methods():
