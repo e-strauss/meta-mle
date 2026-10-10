@@ -94,16 +94,47 @@ anyway. May return later as a probe-style diagnostic only.
       move into the setup's `audit` outputs, or are dropped.
 
 ### Phase 2: MLEvolve profile
-- [ ] Replace `mcgs` with progressive MCGS: UCT + elite schedule + stagnation
-      counters in `workflow_state` (no improvement for N expansions on a branch
-      or globally).
-- [ ] Staged workflow driven by stagnation: exploit (improve best), explore
-      (draft / distant branch), fuse (aggregate).
-- [ ] `aggregate` operator (multi-parent, cross-branch references).
-- [ ] `experience` memory: retrieve similar past experiments (by operator, blocks,
-      error) for planner and repairer; derived state rebuildable from the journal.
-- [ ] Knowledge `llm-prior` for cold start (model families to try, from the LLM).
-- [ ] Planner on. Docs: faithful / adapted / omitted table.
+
+Source: paper (arXiv 2606.06473) and the reference implementation
+(`~/repos/MLEvolve`, `engine/node_selection.py`, `engine/evaluation.py`,
+`engine/conditions.py`, `agents/*_agent.py`, `agents/memory/`).
+
+Mapping (MLEvolve -> nano-mle):
+
+| MLEvolve | nano-mle |
+|---|---|
+| Static data preview, no EDA ("Don't suggest to do EDA") | `--data-overview`, `--max-explorations 0`, `--no-interpreter` |
+| Train/val split written by the coder in each solution | Locked evaluation, written once before search (kept) |
+| UCT, c(t) piecewise decay 1.414 -> 0.5 (phase ratios 0.3/0.7) | `mlevolve` policy; progress = time used, or expansions used without a time budget |
+| Soft switch: UCT with prob w(t), 1.0 until 50 %, to 0.2 at 70 %; else elite top-K (K=5, <=3/branch early; K=3, <=2/branch late), weight 1/rank | same, in the policy |
+| Child limits: 5 drafts at root, 3 improves per node (10 via top-K), 1 debug child per buggy node | same |
+| Improvement chains: continue from the new child until 3 non-improving steps, then backprop | chain in `workflow_state`; selection continues the chain |
+| Rewards -1 / 1 / 2 (new branch best) | policy-specific reward in `operator.after`/policy; replaces the shared -1/1/2 global-best rule for this profile |
+| Branch = a draft's subtree | derived from lineage (draft ancestor); aggregation starts a new branch |
+| Branch stagnation (3 successes without beating branch best) -> evolution, or after half the time fusion with p=0.3 | operator chosen by the policy (`Selection.operator`) |
+| `evolve`: parent + branch trajectory (<=10 ancestors), What/Why/KEEP UNCHANGED template; Tier 2/3 change when success_patience>=2 or total_patience>=5 | `evolve` operator, instruction + `extra_context` (trajectory, patience) |
+| `fuse`: top-2 of every other branch (<=5), adopt ONE technique | `fuse` operator, references |
+| `aggregate`: root, best of each branch, a NEW solution; global stagnation (6 steps), >=2 branches with >=2 successes, time window 6-10 h of 16 h, <=2 | `aggregate` operator, contributors, new branch; window as time fractions 0.375-0.625 |
+| Debug agent for buggy nodes (depth 3 back, 20 max) | inner repair loop first; then `debug` operator on failed leaves (shared with AIDE) |
+| Global memory: per valid node plan/method, label +1/0/-1 vs parent; BM25 + embeddings (RRF); planner query = draft plan, 2 successes + 2 failures; debug query = error -> resolved errors | `experience` memory: BM25 (rank_bm25) over candidate records; planner query = direction + parent description; repairer query = error -> repaired attempts. Embeddings: later |
+| Sibling memory (children of the parent with outcomes) | `experience` memory includes the parent's children |
+| Planner (modules: data/features, model, training) + diff coder | planner on; modules -> named blocks; writer writes the full plan (no diff mode) |
+| Cold-start KB of pretrained models by task type | TODO (needs a curated KB; not for tabular first) |
+| Code review agent, leakage agent | omitted: lint, graph rules and the evaluation lock cover the checks we can enforce |
+| Parallel workers, in-flight counts | omitted: sequential |
+
+Tasks:
+- [ ] `lean` prompt set: methodology for runs without explorations (controller
+      locks evaluation from the task, sources and data overview; population
+      check and pool size go into the setup's audit outputs; planner never
+      requests exploration).
+- [ ] `Selection.operator`; `auto` uses it; `next_expansion_parent` shows it.
+- [ ] Policy-specific rewards (policy `reward(candidate, ...)`; default unchanged).
+- [ ] `mlevolve` policy (UCT decay, soft switch, elite top-K, child limits,
+      chains, stagnation, operator choice); replaces `mcgs` (kept for old runs).
+- [ ] Operators `evolve`, `fuse`, `aggregate`, `debug`.
+- [ ] `experience` memory (BM25 retrieval, sibling memory, branch trajectory).
+- [ ] `mlevolve` profile; README fidelity table.
 
 ### Phase 3: AIDE profile
 - [ ] `debug` operator on failed leaves (after inner repairs).

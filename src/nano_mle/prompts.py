@@ -536,11 +536,111 @@ A repair fixes the planned experiment; a different hypothesis needs a new propos
     repair_rule = '\nRepair the error while preserving the planned experiment.'
 
 
+class Lean(Prompts):
+    """For runs without explorations (e.g. MLEvolve- or AIDE-like profiles): the
+    controller locks evaluation from the task, the sources and context.data_overview;
+    checks that the default set runs as explorations before the lock (population,
+    pool size) become audit outputs of the setup. Proposals follow MLEvolve's
+    structure: one change, why, the evidence, what stays unchanged; a plateau calls
+    for a larger change. Validation rules adapted from MLEvolve's implementation
+    guideline (task semantics, auditable metric, splits by dependency structure).
+    """
+
+    name = "lean"
+    conventions = {
+        **{k: v for k, v in Prompts.conventions.items()
+           if k not in ("population_check", "training_pool", "data_volume_study", "experiments")},
+        "evaluation": """- Evaluation. Choose the population, labels, CV and scorer once, so scores stay
+  comparable. Keep the task's semantics in local validation: score the prediction
+  the task asks for with the task's own metric when it can be expressed as a scorer,
+  never a simpler objective or a proxy metric. Split along the dependency structure
+  the data has (entities, groups, time) and only along it: rows that share an entity
+  or lie later in time than training rows must not cross folds when the prediction
+  rows are new entities or later in time.
+""",
+        "population_check": """- Population check. The labelled rows may be selected differently from the rows to
+  be predicted, also on properties tied to the labels. Without explorations, the
+  evaluation setup does the check itself: return in `audit` the row counts of the
+  candidate populations and an adversarial check, a classifier that tries to tell
+  them from the prediction rows on label-free observables (ROC AUC near 0.5 means
+  indistinguishable; above about 0.55, or above its spread across folds, is a
+  difference). Lock the population with the lowest AUC; among those within the fold
+  noise of it, the least restrictive. A difference in how inputs were recorded that
+  preprocessing can remove calls for normalising, not for dropping rows.
+""",
+        "training_pool": """- Training pool. The locked rows are the training rows and the test folds of every
+  later experiment. Use all labelled rows of the population unless
+  context.data_overview shows tables so large that one experiment would not leave
+  time for a dozen or more within the run; then subsample deterministically and say
+  in the setup why that size. A large pool may keep its test folds a smaller fixed
+  subset; train and test rows must not overlap.
+""",
+        "experiments": """- Experiments. Change one thing per experiment so its effect is attributable; a
+  switch of model family is one change. Natural variants of one change
+  (hyperparameters, estimators, feature blocks for an ablation) go into a named
+  choose_from grid in one experiment. Differences within the fold noise are not
+  evidence.
+""",
+    }
+    control_conventions = ("evaluation", "population_check", "training_pool", "model_families", "hardware")
+
+    control_rules = """
+Choose the next action from context.allowed_actions. This run has no explorations:
+evidence about the data comes from the task description, the sources and
+context.data_overview (schema, missing values, value ranges and a few rows of every
+source), and after the lock from scored candidates and probes.
+Propose establish_evaluation first: the population, labels, CV and metric follow
+from the task and the overview; the setup returns the population check in its audit.
+It is locked afterwards.
+context.next_expansion_parent is the candidate the search policy would expand next,
+with the operator for it when the policy names one; if you expand, write the reason
+as the direction for an experiment on that parent: a goal and the evidence for it.
+Never name estimators, features, formulas or settings: the planner chooses the
+method.
+Score differences smaller than the fold-score spread are ties, not trends.
+context.time shows the elapsed and remaining run time and the typical attempt
+durations: choose actions that fit. Stop only when no useful action fits; while one
+typical expansion still fits, a plateau calls for a change of direction, not a stop.
+"""
+
+    planning_rules = """
+Propose the next experiment on the selected pipeline; do not request exploration.
+Do not propose data analysis: every experiment is a scored pipeline.
+When the selected parent is root, draft a new, relatively simple pipeline, novel
+against the existing drafts in model family or approach, not a minor variation.
+context.operator, when present, is the kind of experiment to propose; follow its
+instruction. context.controller_direction is the goal for expanding now; a method
+named in it is one option, not an instruction.
+Write the description as: the change (which named blocks it touches, what it does),
+why the parent is limited there (root cause, with evidence from scores, fold scores,
+the trajectory and the history), and the mechanism by which the change should help.
+List in changes what stays unchanged: the data handling, the parent's other blocks
+and its successful elements. Prefer adding to or modifying a working block over
+replacing the whole pipeline.
+When the trajectory shows a plateau (two or more scored children without beating
+the branch best), propose a larger change: a new component or representation (a
+different model block, loss, feature block, regularisation) or a different paradigm
+(another model family, an ensemble), not a parameter adjustment.
+Size the experiment (grid variants, model capacity) so it fits in context.time's
+remaining run time. List in reference_ids the candidates whose code the experiment
+reuses beyond the selected parent.
+"""
+
+    writer_rules = """
+Evaluation setup is unscored: it builds and audits the rows, labels, CV and scorer
+that every later pipeline is scored with. There were no explorations: use the task,
+the sources and context.data_overview, and return the population check and the
+reasons for the population size in `audit`. Labelled rows outside the locked
+population stay available to every pipeline as a label source.
+A repair fixes the planned experiment; a different hypothesis needs a new proposal.
+"""
+
+
 def digests(texts):
     return {role: hashlib.sha256(text.encode()).hexdigest()[:16] for role, text in texts.items()}
 
 
-PROMPTS = {"default": Prompts, "oct04": Oct04, "oct09": Oct09}
+PROMPTS = {"default": Prompts, "oct04": Oct04, "oct09": Oct09, "lean": Lean}
 
 
 def prompts(name="default", params=None):

@@ -88,3 +88,13 @@ def test_workspace_records_its_prompt_set_and_each_session_texts(variant_workspa
     assert texts == NoModelGuidance().rendered()
     started = [e for e in store.db.execute("SELECT payload FROM events WHERE kind='run_started'")]
     assert "no-model-guidance" in started[-1][0] and prompts.digests(texts)["control"] in started[-1][0]
+
+
+def test_lean_set_has_no_exploration_methodology():
+    texts = prompts.prompts("lean").rendered()
+    for role in ("control", "planning", "writer"):
+        assert "Before the evaluation setup, explore" not in texts[role]
+        assert "learning curve in an\n  exploration" not in texts[role]
+    assert "context.data_overview" in texts["control"] and "audit" in texts["control"]
+    assert "do not request exploration" in texts["planning"]
+    assert "Data volume study" not in texts["planning"]
