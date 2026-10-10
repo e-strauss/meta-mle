@@ -51,7 +51,7 @@ def main():
                       help="Next-action strategy (default: llm); auto expands after evaluation is locked")
     init.add_argument("--policy", choices=["greedy", "draft-greedy", "mcts", "mcgs", "mlevolve"],
                       help="Parent selection (default: greedy)")
-    init.add_argument("--memory", choices=["window", "full", "aide"],
+    init.add_argument("--memory", choices=["window", "full", "aide", "experience"],
                       help="What model calls see of the run's history; parameters in nano-mle.toml [memory.<name>]")
     init.add_argument("--prompts", help="Prompt set of controller, planner and writer (default: default); "
                       "parameters in nano-mle.toml [prompts.<name>]")

@@ -314,6 +314,8 @@ class Runner:
                 (directory / "response.json").write_text(json.dumps(result))
             attempt.update(status=result["status"], evaluation_count=result.get("evaluation_count", 0),
                            wall_s=result.get("wall_s"))
+            if result["status"] != "ok":  # memories retrieve past errors and their repairs
+                attempt["error"] = " ".join(str(result.get("error", "")).split())[:1000]
             if result.get("warning"):
                 attempt.update(warning=result["warning"], changed_components=result.get("changed_components"))
             self.store.put("attempt", attempt)

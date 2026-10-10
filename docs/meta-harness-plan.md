@@ -4,7 +4,7 @@ nano-mle becomes a meta-harness: each MLE agent is a **profile**, a composition 
 shared components, instead of a custom harness. Agents are reproduced in their
 core ideas, adapted to Skrub plans; deviations are documented per profile.
 
-Status: Phases 0 and 1 done (2026-10-10). Work across several sessions; tick phases off here.
+Status: Phases 0-2 done (2026-10-10); Phase 2 untested on real tasks. Work across several sessions; tick phases off here.
 
 ## Fixed (never per profile)
 
@@ -124,17 +124,19 @@ Mapping (MLEvolve -> nano-mle):
 | Parallel workers, in-flight counts | omitted: sequential |
 
 Tasks:
-- [ ] `lean` prompt set: methodology for runs without explorations (controller
+- [x] `lean` prompt set: methodology for runs without explorations (controller
       locks evaluation from the task, sources and data overview; population
       check and pool size go into the setup's audit outputs; planner never
       requests exploration).
-- [ ] `Selection.operator`; `auto` uses it; `next_expansion_parent` shows it.
-- [ ] Policy-specific rewards (policy `reward(candidate, ...)`; default unchanged).
-- [ ] `mlevolve` policy (UCT decay, soft switch, elite top-K, child limits,
+- [x] `Selection.operator`; `auto` uses it; `next_expansion_parent` shows it.
+- [x] Policy-specific rewards and updates (`policy.update`; default unchanged).
+- [x] `mlevolve` policy (UCT decay, soft switch, elite top-K, child limits,
       chains, stagnation, operator choice); replaces `mcgs` (kept for old runs).
-- [ ] Operators `evolve`, `fuse`, `aggregate`, `debug`.
-- [ ] `experience` memory (BM25 retrieval, sibling memory, branch trajectory).
-- [ ] `mlevolve` profile; README fidelity table.
+- [x] Operators `evolve`, `fuse`, `aggregate`, `debug`.
+- [x] `experience` memory (BM25 retrieval, sibling memory; trajectory via `evolve`).
+- [x] `mlevolve` profile; README sections.
+- [ ] Validate on a real task run; compare with `--profile aide` and the default.
+- [ ] Later: embedding retrieval, forced backpropagation, cold-start KB.
 
 ### Phase 3: AIDE profile
 - [ ] `debug` operator on failed leaves (after inner repairs).

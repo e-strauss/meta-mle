@@ -108,13 +108,21 @@ measurable change when a candidate is selected.
 
 An agent **profile** (`--profile NAME`, registry in `profiles.py`; `--preset` is
 the older spelling) supplies default component choices. The `aide` profile selects
-`auto`, `draft-greedy`, `aide` memory, and `--max-requested-explorations 0`:
+`auto`, `draft-greedy`, `aide` memory, and `--max-requested-explorations 0`. The
+`mlevolve` profile selects `auto`, the `mlevolve` policy, the `experience` memory, the
+`lean` prompt set, no explorations, no interpreter and the data overview:
 
 ```bash
 uv run nano-mle init workspaces/aide-run --task task.json --profile aide \
   --max-expansions 20 --max-evaluations 80 --max-actions 40 --max-model-calls 160 \
   --execution-timeout 1800 --time-budget 8h
 uv run nano-mle run workspaces/aide-run --model openai/gpt-6.1-sol
+```
+
+```bash
+uv run nano-mle init workspaces/mlevolve-run --task task.json --profile mlevolve \
+  --max-expansions 40 --max-evaluations 120 --max-actions 60 --max-model-calls 200 \
+  --execution-timeout 1800 --time-budget 8h
 ```
 
 Explicit flags override the profile regardless of their order. For example,
@@ -197,6 +205,7 @@ Registered sets:
 |---|---|
 | `default` | The current conventions. |
 | `oct04` | The default set as of 2026-10-04, frozen for ablations: population filters compared only when the check shows a difference, no threshold; no training-objective convention; the controller sees the full model conventions and may name methods, which the planner follows; a plateau may end the run. |
+| `lean` | For runs without explorations: the controller locks evaluation from the task, the sources and the data overview; the population check and the pool size become audit outputs of the setup; proposals state the change, why, the evidence and what stays unchanged, with a larger change on a plateau (after MLEvolve). |
 | `oct09` | The default set as of 2026-10-09 (third APTOS round), frozen for ablations: population check preferring the least restrictive rule, weighing lower AUC against lost training rows and normalising recording differences instead of dropping rows; frozen and fine-tuned pretrained models count as different families; the planner lists reused candidates in `reference_ids`. |
 
 ### CPU setup and parallel runs
@@ -399,6 +408,7 @@ class Memory(Protocol):
 | `window` (default) | the best 8 candidates, the last 4 explorations with their output previews, the last 4 failures, all active findings, all probe outputs, the parent's last 6 ancestors |
 | `full` | everything recorded: all candidates, failures, explorations, findings (superseded ones flagged), probes and the whole lineage, up to `max_chars` of JSON (default 400,000); beyond it the oldest explorations, then the oldest failures, then the lowest-ranked candidates are omitted and counted |
 | `aide` | `solutions`: every valid candidate's id, parent, description, configuration description and score, in creation order (not ranked); `failed_drafts`: failed root expansions with their proposal and error; active findings, the last 4 exploration previews and probe outputs preserve evidence for evaluation preparation or an LLM controller. No candidate code, other failures or ancestry are included; the harness still supplies the selected parent's source and current repair traceback. Candidate summaries grow with the run. |
+| `experience` | MLEvolve's memory: `siblings` (the selected parent's other children, or the drafts, with their outcome against the parent: label +1/0/−1, or the error), the best 5 candidates, findings and probe outputs; for the planner `similar_experiments` (2 improved and 2 worse experiments retrieved by BM25 with the controller's direction and the parent's description), for the repairer `similar_errors` (2 errors a later attempt fixed, with the fix's code diff, or a debug expansion fixed). Lexical retrieval only; MLEvolve also uses embeddings. |
 
 With `window`, the context grows early and then levels off; only findings grow
 without bound.
@@ -571,8 +581,17 @@ Candidates are search nodes; explorations and findings are evidence and carry no
 - `mcgs` adds an elite-selection schedule and passes cross-branch candidates to the
   planner as references.
 
-`mcgs` is inspired by [MLEvolve](https://arxiv.org/html/2606.06473); it does not
-reproduce its full operator set.
+- `mlevolve` follows [MLEvolve](https://arxiv.org/html/2606.06473)'s progressive
+  MCGS: UCT with a decaying exploration constant; a switch from UCT to elite top-K
+  selection between 50 % and 70 % of the run; child limits (5 drafts, 3 improvements,
+  1 debug); improvement chains that continue from the newest candidate and
+  backpropagate (−1 failed, 1 valid, 2 new branch best) only when the chain ends;
+  and the operator per expansion: `draft`, `debug` for a failed candidate, `evolve`
+  or later `fuse` on a stagnant branch, `aggregate` at a full root under global
+  stagnation, `improve` otherwise. Its parameters are in `[policy.mlevolve]`; the
+  module docstring of `mlevolve.py` lists what is adapted.
+
+`mcgs` is an earlier, smaller sketch of MLEvolve, kept for existing workspaces.
 
 **Rewards.** Every scored variant is one observation:
 - −1 for a failure;
@@ -599,6 +618,13 @@ selected or submitted).
 | `free` | any | the LLM controller: the controller's reason describes the experiment |
 | `draft` | root | `auto`: a new, simple solution, different from the existing drafts |
 | `improve` | a candidate | `auto`: one measurable change to the parent |
+| `evolve` | a candidate | `mlevolve` on a stagnant branch: a change supported by the branch's trajectory (`context.evolution`); a larger change on a plateau |
+| `fuse` | a candidate | `mlevolve` on a stagnant branch after half the run: adopt one technique from other branches' best candidates (references) |
+| `aggregate` | root | `mlevolve` under global stagnation: a new pipeline from the best candidate of each branch (`context.aggregation`) |
+| `debug` | a failed candidate | `mlevolve`: a minimal fix of a failure the inner repairs left (`context.debug`) |
+
+A policy may name the operator in its selection; `auto` follows it, and the LLM
+controller sees it in `next_expansion_parent`.
 
 Further operators and profiles for other agents are planned in
 [docs/meta-harness-plan.md](docs/meta-harness-plan.md).

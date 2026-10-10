@@ -10,4 +10,10 @@ PROFILES = {
     # AIDE-like drafting and greedy improvement (see README, Agent configurations).
     "aide": {"controller": "auto", "policy": "draft-greedy", "memory": "aide",
              "max_requested_explorations": 0},
+    # MLEvolve (arXiv 2606.06473): no EDA, a static data preview, progressive MCGS
+    # with stagnation-driven operators and retrospective memory. See
+    # docs/meta-harness-plan.md (Phase 2) for what is adapted and omitted.
+    "mlevolve": {"controller": "auto", "policy": "mlevolve", "memory": "experience", "prompts": "lean",
+                 "max_explorations": 0, "max_requested_explorations": 0, "data_overview": True,
+                 "interpreter": False, "planner": True},
 }

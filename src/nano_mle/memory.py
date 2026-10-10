@@ -37,6 +37,11 @@ class Journal:
     def meta(self, key, default=None):
         return self._store.meta(key, default)
 
+    def artifact(self, path):
+        """Text of a file in the workspace (e.g. an attempt's plan.py), or None."""
+        file = self._store.workspace / path
+        return file.read_text() if file.is_file() else None
+
 
 class Memory(Protocol):
     name: str
@@ -180,7 +185,131 @@ class Aide:
         pass
 
 
-MEMORIES = {"window": Window, "full": Full, "aide": Aide}
+def tokens(text):
+    import re
+
+    return re.findall(r"[a-z0-9]+", str(text).lower())
+
+
+def retrieve(documents, query, k, k1=1.5, b=0.75):
+    """The k documents most similar to the query by BM25, best first; none without
+    overlap. Lucene's IDF stays positive in the small collections early in a run."""
+    import math
+
+    if not documents or not tokens(query):
+        return []
+    corpus = [tokens(d["text"]) for d in documents]
+    average = sum(map(len, corpus)) / len(corpus) or 1
+    frequency = {}
+    for words in corpus:
+        for word in set(words):
+            frequency[word] = frequency.get(word, 0) + 1
+    scores = []
+    for index, words in enumerate(corpus):
+        score = 0.0
+        for word in set(tokens(query)):
+            tf = words.count(word)
+            if tf:
+                idf = math.log(1 + (len(corpus) - frequency[word] + 0.5) / (frequency[word] + 0.5))
+                score += idf * tf * (k1 + 1) / (tf + k1 * (1 - b + b * len(words) / average))
+        scores.append((score, index))
+    return [documents[i] for score, i in sorted(scores, key=lambda x: -x[0])[:k] if score > 0]
+
+
+class Experience:
+    """MLEvolve's memory (agents/memory/, search_node.fetch_child_memory), adapted:
+
+    - `siblings`: the selected parent's other children (drafts, for root) with their
+      outcome against the parent, so a new attempt differs from them.
+    - `similar_experiments` (planner): experiments similar to the query (the
+      controller's direction and the parent's description), `retrieve` with label +1
+      (better than the parent) and `retrieve` with label -1 (worse). Every valid
+      candidate is an experience; drafts count as +1, as in MLEvolve.
+    - `similar_errors` (repairer): errors similar to the current one that a later
+      attempt fixed (inner repairs, with the code diff of the fix) or that a debug
+      expansion fixed (with its description).
+    - `leaderboard`: the best few candidates, plus active findings and probe outputs.
+    Retrieval is lexical (BM25); MLEvolve also fuses embedding search, omitted here.
+    """
+
+    name = "experience"
+
+    def __init__(self, leaderboard=5, retrieve=2, threshold=1e-4, diff_chars=2000):
+        self.leaderboard, self.retrieve, self.threshold = leaderboard, retrieve, threshold
+        self.diff_chars = diff_chars
+        self.ask = None
+
+    def outcome(self, candidate, lookup):
+        parent = lookup.get(candidate["parent_id"])
+        if candidate["status"] != "ok":
+            return {"status": "failed", "error": " ".join(str(candidate.get("error") or "").split())[:300]}
+        if parent is None or parent["status"] != "ok":
+            return {"status": "ok", "score": candidate["score"], "label": 1}
+        delta = candidate["score"] - parent["score"]
+        return {"status": "ok", "score": candidate["score"], "change": delta,
+                "label": 0 if abs(delta) < self.threshold else (1 if delta > 0 else -1)}
+
+    def experiences(self, candidates, lookup):
+        return [{"id": c["id"], "operator": c.get("operator"), "description": c.get("description"),
+                 "configuration": c.get("configuration_description"), "blocks": c.get("blocks"),
+                 **self.outcome(c, lookup),
+                 "text": " ".join(str(c.get(k) or "") for k in ("description", "configuration_description", "blocks"))}
+                for c in valid(candidates)]
+
+    def repaired_errors(self, journal, candidates):
+        documents = []
+        by_owner = {}
+        for attempt in journal.records("attempt"):
+            by_owner.setdefault(attempt["owner_id"], []).append(attempt)
+        for attempts in by_owner.values():
+            for failed, fixed in zip(attempts, attempts[1:]):
+                if failed.get("error") and fixed["status"] == "ok":
+                    import difflib
+
+                    before = journal.artifact(failed["path"] + "/plan.py") or ""
+                    after = journal.artifact(fixed["path"] + "/plan.py") or ""
+                    diff = "".join(difflib.unified_diff(before.splitlines(True), after.splitlines(True), n=1))
+                    documents.append({"error": failed["error"][:500], "fix": diff[:self.diff_chars],
+                                      "text": failed["error"]})
+        lookup = {c["id"]: c for c in candidates}
+        for c in candidates:
+            parent = lookup.get(c["parent_id"])
+            if c.get("operator") == "debug" and c["status"] == "ok" and parent and parent.get("error"):
+                documents.append({"error": parent["error"][:500], "fix": c.get("description"), "text": parent["error"]})
+        return documents
+
+    def view(self, role, journal, query=None, parent_id=None):
+        candidates = journal.records("candidate")
+        lookup = {c["id"]: c for c in candidates}
+        context = {"leaderboard": [{k: c.get(k) for k in ("id", "parent_id", "operator", "description",
+                                                           "configuration_description", "score", "fold_scores")}
+                                   for c in sorted(valid(candidates), key=lambda c: c["score"],
+                                                   reverse=True)[:self.leaderboard]],
+                   "findings": active_findings(journal), "probe_outputs": probe_outputs(journal),
+                   "failed_probes": failed_probes(journal)}
+        if parent_id:
+            context["siblings"] = [{"id": c["id"], "operator": c.get("operator"), "description": c.get("description"),
+                                    "configuration": c.get("configuration_description"), **self.outcome(c, lookup)}
+                                   for c in candidates if c["parent_id"] == parent_id]
+        if role == "plan" and query is not None:
+            parent = lookup.get(parent_id) or {}
+            documents = [d for d in self.experiences(candidates, lookup) if d["id"] != parent_id]
+            text = f"{query} {parent.get('description') or ''}"
+            context["similar_experiments"] = {
+                "improved": [{k: v for k, v in d.items() if k != "text"}
+                             for d in retrieve([d for d in documents if d["label"] == 1], text, self.retrieve)],
+                "worse": [{k: v for k, v in d.items() if k != "text"}
+                          for d in retrieve([d for d in documents if d["label"] == -1], text, self.retrieve)]}
+        if role == "repair" and query:
+            context["similar_errors"] = [{k: v for k, v in d.items() if k != "text"} for d in
+                                         retrieve(self.repaired_errors(journal, candidates), query, self.retrieve)]
+        return context
+
+    def observe(self, kind, record):
+        pass
+
+
+MEMORIES = {"window": Window, "full": Full, "aide": Aide, "experience": Experience}
 
 
 def memory(name, params=None):
