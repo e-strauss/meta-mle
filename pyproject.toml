@@ -1,5 +1,5 @@
 [project]
-name = "nano-mle"
+name = "meta-mle"
 version = "0.1.0"
 description = "A sequential DSPy harness for exploration and Skrub pipeline search"
 readme = "README.md"
@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.scripts]
-nano-mle = "nano_mle:main"
+meta-mle = "meta_mle:main"
 
 [build-system]
 requires = ["uv_build>=0.12.10,<0.13.0"]

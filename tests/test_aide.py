@@ -3,10 +3,10 @@ import sys
 
 import pandas as pd
 
-from nano_mle.cli import main
-from nano_mle.runner import Runner
-from nano_mle.search import Aide
-from nano_mle.store import Store
+from meta_mle.cli import main
+from meta_mle.runner import Runner
+from meta_mle.search import Aide
+from meta_mle.store import Store
 from test_switches import Recording
 
 
@@ -48,7 +48,7 @@ def test_aide_profile_describes_candidates_with_the_writers_plan(tmp_path, monke
     (tmp_path / "task.json").write_text(json.dumps({"description": "Independent regression rows",
                                                     "sources": {"train": "train.csv"}, "target": "target"}))
     root = tmp_path / "workspace"
-    monkeypatch.setattr(sys, "argv", ["nano-mle", "init", str(root), "--task", str(tmp_path / "task.json"),
+    monkeypatch.setattr(sys, "argv", ["meta-mle", "init", str(root), "--task", str(tmp_path / "task.json"),
                                       "--profile", "aide", "--max-expansions", "6", "--max-evaluations", "12"])
     main()
     backend = Docstrings(explore=False)

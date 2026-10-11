@@ -8,7 +8,7 @@ the proposed system; its presets and additional components are not implemented.
 `configurable-system-agents` annotates the same proposed components and connections
 for mle-claude, AIDE, MLEvolve, MLE-STAR and FM-Agent.
 
-![Proposed configurable nano-mle system](configurable-system.svg)
+![Proposed configurable meta-mle system](configurable-system.svg)
 
 [Proposed D2 source](configurable-system.d2) ·
 [Proposed PNG](configurable-system.png) ·
@@ -93,7 +93,7 @@ default profile; optional components can still be disabled for an ablation.
 These labels describe intended profiles, not exact copies of the original systems
 or a claim that each original has a separate module for every box. In particular,
 the fixed Skrub writer, evaluation lock, journal and inner repair loop are common
-nano-mle infrastructure. AIDE's controller-level debugging is deliberately adapted
+meta-mle infrastructure. AIDE's controller-level debugging is deliberately adapted
 to this inner repair loop.
 
 | Profile | Control and selection | Distinctive operations | Context and knowledge |
@@ -118,7 +118,7 @@ available alternative. A standalone exploration interpreter and probe are not
 required by the latter four profiles. MLE-STAR's ablations are scored candidates,
 not unscored EDA or probes. MLEvolve's experience summaries belong to its memory
 and FM-Agent's population feedback belongs to search state. C's probe box maps
-the OOF diagnostic function into nano-mle; mle-claude can inspect those predictions
+the OOF diagnostic function into meta-mle; mle-claude can inspect those predictions
 within its own context rather than through a separate probe module.
 
 The history/context box is marked `[ALL]` because all five approaches use prior

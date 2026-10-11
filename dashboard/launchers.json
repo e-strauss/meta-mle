@@ -3,12 +3,12 @@
     "../workspaces"
   ],
   "harnesses": {
-    "nano-mle": {
+    "meta-mle": {
       "cwd": "..",
       "draw": [
         "uv",
         "run",
-        "nano-mle",
+        "meta-mle",
         "draw",
         "{attempt}"
       ],
@@ -17,9 +17,9 @@
   },
   "launchers": [
     {
-      "id": "nano-mle",
-      "label": "nano-mle",
-      "description": "Initialise a nano-mle workspace, then run it with the given model (API calls).",
+      "id": "meta-mle",
+      "label": "meta-mle",
+      "description": "Initialise a meta-mle workspace, then run it with the given model (API calls).",
       "cwd": "..",
       "root": "../workspaces",
       "workspace": "{root}/{name}",
@@ -143,7 +143,7 @@
         [
           "uv",
           "run",
-          "nano-mle",
+          "meta-mle",
           "init",
           "{workspace}",
           "--task",
@@ -170,7 +170,7 @@
         [
           "uv",
           "run",
-          "nano-mle",
+          "meta-mle",
           "run",
           "{workspace}",
           "--model",

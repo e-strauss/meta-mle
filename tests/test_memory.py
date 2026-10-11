@@ -2,11 +2,11 @@ import json
 
 import pytest
 
-from nano_mle import memory as memories
-from nano_mle.memory import Aide, Full, Journal, Window
-from nano_mle.models import Budget, Task
-from nano_mle.runner import Runner, initialize
-from nano_mle.store import Store
+from meta_mle import memory as memories
+from meta_mle.memory import Aide, Full, Journal, Window
+from meta_mle.models import Budget, Task
+from meta_mle.runner import Runner, initialize
+from meta_mle.store import Store
 from scripted import ScriptedBackend, make_scripted_run
 
 ROLES = ("control", "plan", "implement", "repair", "interpret")
@@ -103,7 +103,7 @@ def test_memory_calls_are_journaled_and_budgeted(tmp_path, monkeypatch):
 
 
 def test_unknown_memory_parameters_fail_at_init(tmp_path, monkeypatch):
-    monkeypatch.setattr("nano_mle.runner.load_config", lambda: {"memory": {"window": {"leaderbord": 3}}})
+    monkeypatch.setattr("meta_mle.runner.load_config", lambda: {"memory": {"window": {"leaderbord": 3}}})
     train = tmp_path / "train.csv"
     train.write_text("a,target\n1,2\n")
     task = Task(description="d", sources={"train": str(train)}, target="target")

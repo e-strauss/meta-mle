@@ -8,8 +8,8 @@ import type {
   ScorePoint, Section, TimelineEvent,
 } from "../types";
 
-// Reads a nano-mle workspace (state.db + artifacts/) strictly read-only.
-// This file is the only place in the dashboard that knows nano-mle's layout.
+// Reads a meta-mle workspace (state.db + artifacts/) strictly read-only.
+// This file is the only place in the dashboard that knows meta-mle's layout.
 
 type Rec = Record<string, any>;
 
@@ -171,7 +171,7 @@ function summarize(ws: Workspace, id: string): RunSummary {
   const desc: string = ws.meta.task?.description ?? "";
   return {
     id,
-    adapter: "nano-mle",
+    adapter: "meta-mle",
     title: desc.split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "").slice(0, 120) ?? id,
     state,
     live: Boolean(pid),
@@ -522,8 +522,8 @@ function contextSizes(ws: Workspace): ContextSizes {
   return { parts: [...CONTEXT_PARTS.map(([name]) => name), "other"], points };
 }
 
-export const nanoMle: Adapter = {
-  name: "nano-mle",
+export const metaMle: Adapter = {
+  name: "meta-mle",
   detect(dir) {
     return existsSync(path.join(dir, "state.db")) && existsSync(path.join(dir, "workspace.json"));
   },

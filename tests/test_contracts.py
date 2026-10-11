@@ -3,9 +3,9 @@ import pytest
 import skrub
 from sklearn.model_selection import KFold, GroupKFold
 from sklearn.linear_model import Ridge
-from nano_mle.contracts import ContractDrift, create_contract, source_manifest, verify_contract
-from nano_mle.evaluation import audit_boundary
-from nano_mle.models import EvaluationSpec, Task
+from meta_mle.contracts import ContractDrift, create_contract, source_manifest, verify_contract
+from meta_mle.evaluation import audit_boundary
+from meta_mle.models import EvaluationSpec, Task
 
 
 def boundary(path, cv=None, filtered=False, shifted=False):

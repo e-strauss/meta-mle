@@ -74,7 +74,7 @@ def model_label(model, reasoning_effort=None):
 
 
 def role_models(model, max_tokens, timeout, reasoning_effort, overrides):
-    """Model settings per role: the run's model, unless nano-mle.toml [models.<role>]
+    """Model settings per role: the run's model, unless meta-mle.toml [models.<role>]
     names another. An override's omitted keys come from the run's settings, except
     reasoning_effort, which belongs to the model and so falls back only with it."""
     unknown = set(overrides) - set(ROLES)

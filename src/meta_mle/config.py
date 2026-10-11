@@ -1,6 +1,6 @@
-"""Harness configuration: nano-mle.toml at the repository root (gitignored).
+"""Harness configuration: meta-mle.toml at the repository root (gitignored).
 
-nano-mle.example.toml holds the defaults and documents each setting. A missing
+meta-mle.example.toml holds the defaults and documents each setting. A missing
 file or key falls back to the defaults below.
 """
 
@@ -29,9 +29,9 @@ DEFAULTS = {
 
 
 def config_path() -> Path:
-    if os.environ.get("NANO_MLE_CONFIG"):
-        return Path(os.environ["NANO_MLE_CONFIG"])
-    return Path(__file__).resolve().parents[2] / "nano-mle.toml"
+    if os.environ.get("META_MLE_CONFIG"):
+        return Path(os.environ["META_MLE_CONFIG"])
+    return Path(__file__).resolve().parents[2] / "meta-mle.toml"
 
 
 @cache

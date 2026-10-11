@@ -3,8 +3,8 @@
 import numpy as np
 import pandas as pd
 
-from nano_mle.models import Budget, Decision, EvaluationSpec, Finding, Proposal, Task
-from nano_mle.runner import Runner, initialize
+from meta_mle.models import Budget, Decision, EvaluationSpec, Finding, Proposal, Task
+from meta_mle.runner import Runner, initialize
 
 
 class ScriptedBackend:

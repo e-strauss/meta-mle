@@ -76,7 +76,7 @@ provenance preserved.
 - What context and candidate references should transfer between branches?
 
 Multiple evaluation branches and their allocation policy are deferred. The current
-nano-mle design should first support one agent-authored, locked evaluation setup.
+meta-mle design should first support one agent-authored, locked evaluation setup.
 
 ## Retrieval memory
 
@@ -90,7 +90,7 @@ queries with the plan text, debugging with the error message. Different agents r
 different scopes (their own branch, successful trajectories of other branches).
 Removing the memory dropped their lite-benchmark medal rate from 82% to 68%.
 
-In nano-mle the memory API already carries what this needs. Each role passes a query:
+In meta-mle the memory API already carries what this needs. Each role passes a query:
 the planner the controller's direction, the repairer the error, the writer its
 intent. `observe` can maintain the index after each record write. The index must be
 rebuildable from the journal so resume keeps working.

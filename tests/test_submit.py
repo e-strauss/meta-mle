@@ -1,9 +1,9 @@
 import pandas as pd
 import pytest
 
-from nano_mle.models import Task
-from nano_mle.store import Store
-from nano_mle.submit import submit
+from meta_mle.models import Task
+from meta_mle.store import Store
+from meta_mle.submit import submit
 from scripted import ScriptedBackend, make_scripted_run
 
 FINAL = '''import pandas as pd
@@ -81,8 +81,8 @@ class SearchThenFinal(FinalBackend):
 
 @pytest.fixture
 def ready(tmp_path, finished):
-    from nano_mle.models import Budget
-    from nano_mle.runner import initialize
+    from meta_mle.models import Budget
+    from meta_mle.runner import initialize
 
     _, task, paths = finished
     workspace = tmp_path / "fresh"
@@ -91,7 +91,7 @@ def ready(tmp_path, finished):
 
 
 def test_run_ends_with_a_submission_unless_disabled(ready):
-    from nano_mle.runner import Runner
+    from meta_mle.runner import Runner
 
     workspace, paths = ready
     backend = SearchThenFinal(FINAL.format(**paths))
@@ -105,7 +105,7 @@ def test_run_ends_with_a_submission_unless_disabled(ready):
 
 
 def test_failed_submission_leaves_the_run_complete(ready):
-    from nano_mle.runner import Runner
+    from meta_mle.runner import Runner
 
     workspace, paths = ready
     backend = SearchThenFinal("def build():\n    return {}\n")
@@ -116,7 +116,7 @@ def test_failed_submission_leaves_the_run_complete(ready):
 
 
 def test_run_without_submit_writes_none(ready):
-    from nano_mle.runner import Runner
+    from meta_mle.runner import Runner
 
     workspace, paths = ready
     Runner(workspace, SearchThenFinal(FINAL.format(**paths))).run()

@@ -49,7 +49,7 @@ def pick_candidate(store, candidate_id=None):
 
 def submit(workspace: Path, backend, candidate_id=None, task: Task | None = None,
            max_repairs=2, timeout=7200, notify=print):
-    """`nano-mle submit`: take the workspace lock, then write the submission."""
+    """`meta-mle submit`: take the workspace lock, then write the submission."""
     workspace = workspace.resolve()
     if not (workspace / "state.db").exists():
         raise ValueError("Not an initialized workspace")

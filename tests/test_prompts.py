@@ -1,11 +1,11 @@
 import pandas as pd
 import pytest
 
-from nano_mle import prompts
-from nano_mle.models import Budget, Task
-from nano_mle.plans import GUIDE
-from nano_mle.runner import Runner, initialize
-from nano_mle.store import Store
+from meta_mle import prompts
+from meta_mle.models import Budget, Task
+from meta_mle.plans import GUIDE
+from meta_mle.runner import Runner, initialize
+from meta_mle.store import Store
 from scripted import ScriptedBackend
 
 

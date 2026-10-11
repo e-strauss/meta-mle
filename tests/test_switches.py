@@ -2,10 +2,10 @@ import json
 
 import pandas as pd
 
-from nano_mle.models import Budget, Decision, EvaluationSpec, Task
-from nano_mle.overview import data_overview
-from nano_mle.runner import Runner, initialize
-from nano_mle.store import Store
+from meta_mle.models import Budget, Decision, EvaluationSpec, Task
+from meta_mle.overview import data_overview
+from meta_mle.runner import Runner, initialize
+from meta_mle.store import Store
 from scripted import ScriptedBackend
 
 

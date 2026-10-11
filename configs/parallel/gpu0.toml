@@ -1,5 +1,5 @@
-# nano-mle configuration. Copy to nano-mle.toml (gitignored) and adjust.
-# Without nano-mle.toml these defaults apply. NANO_MLE_CONFIG points to another file.
+# meta-mle configuration. Copy to meta-mle.toml (gitignored) and adjust.
+# Without meta-mle.toml these defaults apply. META_MLE_CONFIG points to another file.
 # Each run records the configuration it used in its workspace metadata.
 
 [execution]
@@ -24,7 +24,7 @@ restrict_primitives = false
 # parts are needed before the lock and measure a learning curve after it.
 data_volume_study = true
 
-# Memory parameters, read at `nano-mle init --memory <name>` and recorded in the
+# Memory parameters, read at `meta-mle init --memory <name>` and recorded in the
 # workspace. Omitted keys use the defaults shown.
 [memory.window]
 # leaderboard = 8     # best candidates shown

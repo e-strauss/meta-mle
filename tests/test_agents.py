@@ -1,5 +1,5 @@
 import pytest
-from nano_mle.agents import lm_settings
+from meta_mle.agents import lm_settings
 
 
 def test_gpt61_sol_keeps_a_bounded_reasoning_request_without_sampling():
@@ -26,7 +26,7 @@ def test_reasoning_effort_is_passed_through():
 
 
 def test_bare_plan_code_is_accepted_as_the_writer_answer():
-    from nano_mle.agents import bare_source
+    from meta_mle.agents import bare_source
 
     code = "import skrub\n\ndef build():\n    return {}\n"
     assert bare_source(code) == code.strip()
@@ -38,7 +38,7 @@ def test_bare_plan_code_is_accepted_as_the_writer_answer():
 def test_usage_sums_every_lm_request_of_a_call():
     from litellm.types.utils import CompletionTokensDetailsWrapper, Usage
 
-    from nano_mle.agents import usage_of
+    from meta_mle.agents import usage_of
 
     usage = dict(Usage(prompt_tokens=100, completion_tokens=50, total_tokens=150,
                        completion_tokens_details=CompletionTokensDetailsWrapper(reasoning_tokens=30)))
@@ -52,7 +52,7 @@ def test_provider_errors_become_model_unavailable_and_parse_errors_do_not():
     import dspy
     from dspy.utils.exceptions import LMTransportError
 
-    from nano_mle.agents import DSPyBackend, ModelUnavailable
+    from meta_mle.agents import DSPyBackend, ModelUnavailable
 
     backend = object.__new__(DSPyBackend)  # without a live LM; only _call is exercised
     backend.dspy, backend.lm, backend.adapter = dspy, dspy.LM("openai/gpt-test"), dspy.ChatAdapter()
@@ -70,7 +70,7 @@ def test_provider_errors_become_model_unavailable_and_parse_errors_do_not():
 
 
 def test_roles_use_the_run_model_unless_the_config_names_another():
-    from nano_mle.agents import ROLES, role_models
+    from meta_mle.agents import ROLES, role_models
 
     same = role_models("gemini/gemini-3.8-flash", 64000, 600, "high", {})
     assert {s["model"] for s in same.values()} == {"gemini/gemini-3.8-flash"} and set(same) == set(ROLES)

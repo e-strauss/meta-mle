@@ -7,7 +7,7 @@ can replace, drop or add one rule. The plan contract (plans.GUIDE) is enforced b
 harness and is not part of a set; a set may only add notes after it (`guide_notes`).
 
 A set is chosen at `init --prompts NAME` with parameters from [prompts.NAME] in
-nano-mle.toml and recorded in the workspace; the rendered texts are recorded at every
+meta-mle.toml and recorded in the workspace; the rendered texts are recorded at every
 run start. The working conventions are task-independent and adapted from mle-claude.
 """
 import hashlib

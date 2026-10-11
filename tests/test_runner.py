@@ -4,10 +4,10 @@ import json
 import pandas as pd
 import pytest
 
-from nano_mle.agents import ModelUnavailable
-from nano_mle.models import Budget, EvaluationSpec, Task
-from nano_mle.runner import Runner, initialize
-from nano_mle.store import Store
+from meta_mle.agents import ModelUnavailable
+from meta_mle.models import Budget, EvaluationSpec, Task
+from meta_mle.runner import Runner, initialize
+from meta_mle.store import Store
 from scripted import ScriptedBackend, make_scripted_run
 
 
@@ -187,9 +187,9 @@ def test_drift_is_warning_without_candidates_or_reward(workspace):
 
 
 def test_missing_libraries_are_recorded_once_per_module(tmp_path, monkeypatch):
-    from nano_mle.libraries import record_missing, record_path
+    from meta_mle.libraries import record_missing, record_path
 
-    monkeypatch.setenv("NANO_MLE_MISSING_LIBRARIES", str(tmp_path / "missing.json"))
+    monkeypatch.setenv("META_MLE_MISSING_LIBRARIES", str(tmp_path / "missing.json"))
     record_missing(["somelib"], tmp_path / "ws1", "exploration_a")
     record_missing(["somelib", "otherlib"], tmp_path / "ws2", "expansion_b")
     data = json.loads(record_path().read_text())
@@ -201,7 +201,7 @@ class ProbeBackend(ScriptedBackend):
     """Explore, lock, expand once, probe the candidate, then analyse its predictions."""
 
     def control(self, context):
-        from nano_mle.models import Decision
+        from meta_mle.models import Decision
 
         counts = context["counts"]
         if counts["expansions"] >= 1 and counts["probes"] == 0:
@@ -259,7 +259,7 @@ class ProbeOnceBackend(ProbeBackend):
     """Probe the candidate, then probe a failing new pipeline, then stop."""
 
     def control(self, context):
-        from nano_mle.models import Decision
+        from meta_mle.models import Decision
 
         self.controls = getattr(self, "controls", []) + [context]
         if context["counts"]["probes"] == 1:
@@ -277,7 +277,7 @@ class ProbeOnceBackend(ProbeBackend):
 def test_a_candidate_probe_reuses_the_predictions_kept_at_scoring(workspace, tmp_path, monkeypatch):
     config = tmp_path / "sequential.toml"
     config.write_text("[execution]\ncpu_threads = 2\ngrid_n_jobs = 1\n")
-    monkeypatch.setenv("NANO_MLE_CONFIG", str(config))
+    monkeypatch.setenv("META_MLE_CONFIG", str(config))
     backend = ProbeOnceBackend(workspace)
     Runner(workspace, backend).run()
     store = Store(workspace)
@@ -392,7 +392,7 @@ def test_attempt_timeout_never_exceeds_the_remaining_time(workspace):
 
 
 def test_time_budget_parses_units():
-    from nano_mle.cli import duration
+    from meta_mle.cli import duration
 
     assert [duration(t) for t in ("3600", "90m", "8h", "1d", "45s")] == [3600, 5400, 28800, 86400, 45]
 
@@ -542,7 +542,7 @@ def test_no_repair_starts_when_less_time_remains_than_a_typical_attempt(workspac
     runner = Runner(workspace, ScriptedBackend())
     monkeypatch.setattr(runner, "remaining_seconds", lambda: 5)
     monkeypatch.setattr(runner, "time_context", lambda: {"typical_attempt_s": {"expansion": 60}})
-    monkeypatch.setattr("nano_mle.runner.run_plan", lambda *a: {"status": "failed", "error": "boom"})
+    monkeypatch.setattr("meta_mle.runner.run_plan", lambda *a: {"status": "failed", "error": "boom"})
     runner.budget = runner.budget.model_copy(update={"max_repairs": 2})
     record = {"id": "expansion_abc"}
     result, _ = runner.execute("exploration", record, {}, {}, source="def build():\n    return {}\n")

@@ -1,6 +1,6 @@
-from nano_mle.fm import Islands, diversity
-from nano_mle.runner import Runner
-from nano_mle.store import Store
+from meta_mle.fm import Islands, diversity
+from meta_mle.runner import Runner
+from meta_mle.store import Store
 from test_controllers import ExperimentBackend, workspace
 
 

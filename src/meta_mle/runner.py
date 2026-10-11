@@ -702,7 +702,7 @@ class Runner:
         try:
             write_submission(self.workspace, self.store, self.backend, max_repairs=self.budget.max_repairs,
                              timeout=timeout, notify=self.notify)
-        except Exception as error:  # the search result stands; nano-mle submit can retry
+        except Exception as error:  # the search result stands; meta-mle submit can retry
             self.store.event("submission_failed", error=" ".join(str(error).split())[:2000])
             self.notify(f"Submission failed: {error}")
 

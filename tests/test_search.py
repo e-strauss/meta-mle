@@ -1,6 +1,6 @@
 import pytest
 
-from nano_mle.search import DraftGreedy, Greedy, MCGS, MCTS, policy, update_stats
+from meta_mle.search import DraftGreedy, Greedy, MCGS, MCTS, policy, update_stats
 
 
 def candidate(id, parent="root", score=1):

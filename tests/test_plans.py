@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import skrub
-from nano_mle.graphs import validate_graph
-from nano_mle.plans import resolve_source, validate_source
+from meta_mle.graphs import validate_graph
+from meta_mle.plans import resolve_source, validate_source
 
 @pytest.mark.parametrize('body', ["return open('features.csv')", "return data.to_csv('features.csv')", "return data.skb.eval()"])
 def test_forbidden_execution(body):
@@ -59,7 +59,7 @@ def test_eager_reader_alias_rejected():
 
 
 def test_locked_setup_export_preserves_existing_helper():
-    from nano_mle.plans import evaluation_source
+    from meta_mle.plans import evaluation_source
     source = '''def build_evaluation():
     return {'scoring': 'r2'}
 
@@ -121,7 +121,7 @@ def build():
         validate_source("def build():\n    return model.fit(X)\n")
 
 def test_installed_libraries_import_and_missing_ones_are_named():
-    from nano_mle.plans import MissingLibrary
+    from meta_mle.plans import MissingLibrary
 
     validate_source("import lightgbm\nfrom xgboost import XGBClassifier\nimport polars as pl\n"
                     "def build():\n    return {}\n")
@@ -163,7 +163,7 @@ def test_getattr_only_with_literal_public_name():
 
 def test_library_functions_allowed_unless_primitives_are_restricted(tmp_path, monkeypatch):
     import scipy.special
-    from nano_mle import graphs
+    from meta_mle import graphs
 
     with skrub.config_context(eager_data_ops=False):
         column = skrub.as_data_op(str(tmp_path / 'rows.csv')).skb.apply_func(pd.read_csv)['a']
@@ -179,13 +179,13 @@ def test_library_functions_allowed_unless_primitives_are_restricted(tmp_path, mo
 
 
 def test_config_defaults_and_unknown_keys(tmp_path, monkeypatch):
-    from nano_mle import config
+    from meta_mle import config
 
-    monkeypatch.setenv("NANO_MLE_CONFIG", str(tmp_path / "missing.toml"))
+    monkeypatch.setenv("META_MLE_CONFIG", str(tmp_path / "missing.toml"))
     config.load_config.cache_clear()
     assert config.load_config() == config.DEFAULTS
     (tmp_path / "bad.toml").write_text("[execution]\nthreads = 4\n")
-    monkeypatch.setenv("NANO_MLE_CONFIG", str(tmp_path / "bad.toml"))
+    monkeypatch.setenv("META_MLE_CONFIG", str(tmp_path / "bad.toml"))
     config.load_config.cache_clear()
     with pytest.raises(ValueError, match="Unknown keys"):
         config.load_config()
@@ -193,14 +193,14 @@ def test_config_defaults_and_unknown_keys(tmp_path, monkeypatch):
 
 
 def test_data_volume_study_prompt_follows_config(tmp_path, monkeypatch):
-    from nano_mle import config, prompts
+    from meta_mle import config, prompts
 
     # The older flat key [prompts] data_volume_study still works.
     for text in ("[prompts]\ndata_volume_study = {}\n", "[prompts.default]\ndata_volume_study = {}\n"):
         for enabled in (True, False):
             path = tmp_path / "prompts.toml"
             path.write_text(text.format(str(enabled).lower()))
-            monkeypatch.setenv("NANO_MLE_CONFIG", str(path))
+            monkeypatch.setenv("META_MLE_CONFIG", str(path))
             config.load_config.cache_clear()
             prompt_set = prompts.prompts("default", config.load_config()["prompts"]["default"])
             assert ("Data volume study" in prompt_set.writer()) == enabled
@@ -213,7 +213,7 @@ def test_data_volume_study_prompt_follows_config(tmp_path, monkeypatch):
 
 
 def test_plans_read_only_task_sources(tmp_path):
-    from nano_mle.graphs import check_reads
+    from meta_mle.graphs import check_reads
 
     task = tmp_path / "task"
     task.mkdir()
@@ -331,12 +331,12 @@ def build():
 
 
 def test_hardware_comes_from_the_config_only(tmp_path, monkeypatch):
-    from nano_mle import config
+    from meta_mle import config
 
     path = tmp_path / "hw.toml"
     path.write_text('[execution]\ncpu_threads = 16\ngrid_n_jobs = 2\n'
                     '[hardware]\nmemory_gb = 512\ngpus = ["NVIDIA A100-SXM4-80GB, 80 GB"]\n')
-    monkeypatch.setenv("NANO_MLE_CONFIG", str(path))
+    monkeypatch.setenv("META_MLE_CONFIG", str(path))
     config.load_config.cache_clear()
     stated = config.hardware()
     assert stated["cpu_threads"] == 16 and stated["threads_per_pipeline_fit"] == 8
@@ -352,7 +352,7 @@ def test_hardware_comes_from_the_config_only(tmp_path, monkeypatch):
 
 
 def test_model_choice_conventions_reach_controller_and_planner():
-    from nano_mle import prompts
+    from meta_mle import prompts
 
     for instructions in prompts.prompts().rendered().values():
         assert "Model families" in instructions and "context.hardware" in instructions
@@ -360,7 +360,7 @@ def test_model_choice_conventions_reach_controller_and_planner():
 
 
 def test_plan_reader_functions_allowed_and_fingerprinted(tmp_path):
-    from nano_mle.graphs import fingerprint
+    from meta_mle.graphs import fingerprint
 
     def read_sizes(paths, scale=1):
         return pd.DataFrame({"n": [len(p) * scale for p in paths]})

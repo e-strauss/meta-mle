@@ -4,15 +4,15 @@ A small Next.js dashboard for ML experiment harness runs: which runs are live,
 past runs, the search tree with every node's proposal, code, repairs, scores and
 findings, and a form to start new runs. It is independent of any harness: it
 reads run directories strictly read-only and never imports harness code.
-Nothing in nano-mle depends on it.
+Nothing in meta-mle depends on it.
 
 ```
 dashboard/
   launchers.json        runs roots + launch templates (committed defaults)
   launchers.local.json  optional machine-specific overrides (gitignored)
   lib/types.ts          harness-neutral run model (runs, nodes, edges, sections)
-  lib/adapters/         one adapter per harness; nano-mle.ts is the only code
-                        that knows nano-mle's state.db / artifacts layout
+  lib/adapters/         one adapter per harness; meta-mle.ts is the only code
+                        that knows meta-mle's state.db / artifacts layout
   lib/runs.ts           discovers runs under the roots, guarded file access
   lib/launch.ts         validates a launch form, starts scripts/launch-runner.mjs
   lib/procs.ts          liveness from /proc/locks (never takes a lock)
@@ -33,7 +33,7 @@ npm run set-password      # single login, written to .env.local (mode 0600)
 The dashboard needs no harness credentials. Launched processes inherit its
 environment minus its own login secrets; harness configuration (model API keys,
 `GOOGLE_APPLICATION_CREDENTIALS` for remote data) belongs in the harness's own
-environment, e.g. nano-mle's repository `.env`.
+environment, e.g. meta-mle's repository `.env`.
 
 ## Run
 
@@ -66,7 +66,7 @@ From a laptop: `ssh -N -L 3200:localhost:3200 <node>` and open
   definitions, substituted into the templates and executed without a shell by a
   detached `scripts/launch-runner.mjs`, which records `.launches/<id>/` (command,
   output log, status). Launches survive dashboard restarts and can be stopped with
-  SIGINT, which nano-mle records as an interruption.
+  SIGINT, which meta-mle records as an interruption.
 
 ## Adding another harness
 

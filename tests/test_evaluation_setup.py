@@ -1,9 +1,9 @@
 """Realistic multi-table, derived-label setup with an agent-defined splitter."""
 import pandas as pd
-from nano_mle.execution import run_plan
-from nano_mle.contracts import create_contract
-from nano_mle.models import EvaluationSpec
-from nano_mle.plans import evaluation_source
+from meta_mle.execution import run_plan
+from meta_mle.contracts import create_contract
+from meta_mle.models import EvaluationSpec
+from meta_mle.plans import evaluation_source
 
 
 def test_custom_population_labels_and_cutoff_cv(tmp_path):
@@ -241,7 +241,7 @@ def build():
     assert parallel['status'] == 'ok' and all('oof_file' not in v for v in parallel['variants'])
     config = tmp_path / 'sequential.toml'
     config.write_text('[execution]\ncpu_threads = 2\ngrid_n_jobs = 1\n')
-    monkeypatch.setenv('NANO_MLE_CONFIG', str(config))
+    monkeypatch.setenv('META_MLE_CONFIG', str(config))
     scored = run_plan(tmp_path / 'candidate', grid, {**request, 'kind': 'pipeline', 'remaining_evaluations': 2}, 60)
     assert scored['status'] == 'ok', scored
     for variant in scored['variants']:
@@ -254,7 +254,7 @@ def build():
 
 def test_contract_references_folds_instead_of_inlining_them(tmp_path):
     import json
-    from nano_mle.contracts import contract_folds
+    from meta_mle.contracts import contract_folds
 
     data = tmp_path / 'train.csv'
     pd.DataFrame({'a': range(30), 'target': range(30)}).to_csv(data, index=False)

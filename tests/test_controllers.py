@@ -3,10 +3,10 @@ import json
 import pandas as pd
 import pytest
 
-from nano_mle.controllers import Auto, LLM, recent_expansion_s
-from nano_mle.models import Budget, Decision, Proposal, Task
-from nano_mle.runner import Runner, initialize
-from nano_mle.store import Store
+from meta_mle.controllers import Auto, LLM, recent_expansion_s
+from meta_mle.models import Budget, Decision, Proposal, Task
+from meta_mle.runner import Runner, initialize
+from meta_mle.store import Store
 from scripted import ScriptedBackend
 
 
@@ -126,10 +126,10 @@ def events(store, kind):
 
 
 def test_auto_workflow_bootstraps_then_drafts_and_improves(tmp_path, monkeypatch):
-    from nano_mle.config import load_config
+    from meta_mle.config import load_config
 
     settings = load_config()
-    monkeypatch.setattr("nano_mle.runner.load_config", lambda: {
+    monkeypatch.setattr("meta_mle.runner.load_config", lambda: {
         **settings, "policy": {"draft-greedy": {"num_drafts": 2}}})
     root = workspace(tmp_path, max_expansions=3, max_evaluations=8, max_requested_explorations=0)
     backend = ExperimentBackend()
@@ -160,10 +160,10 @@ def test_auto_workflow_bootstraps_then_drafts_and_improves(tmp_path, monkeypatch
 
 
 def test_failed_planner_drafts_count_and_requested_explorations_do_not_run(tmp_path, monkeypatch):
-    from nano_mle.config import load_config
+    from meta_mle.config import load_config
 
     settings = load_config()
-    monkeypatch.setattr("nano_mle.runner.load_config", lambda: {
+    monkeypatch.setattr("meta_mle.runner.load_config", lambda: {
         **settings, "policy": {"draft-greedy": {"num_drafts": 2}}})
 
     class FailSecondDraft(ExperimentBackend):

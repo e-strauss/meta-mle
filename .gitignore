@@ -17,5 +17,5 @@ wheels/
 .pytest_cache/
 workspaces/
 
-# Local harness configuration (see nano-mle.example.toml)
-nano-mle.toml
+# Local harness configuration (see meta-mle.example.toml)
+meta-mle.toml

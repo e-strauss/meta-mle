@@ -52,9 +52,9 @@ def main():
     init.add_argument("--policy", choices=["greedy", "draft-greedy", "aide", "mcts", "mcgs", "mlevolve", "islands"],
                       help="Parent selection (default: greedy)")
     init.add_argument("--memory", choices=["window", "full", "aide", "experience"],
-                      help="What model calls see of the run's history; parameters in nano-mle.toml [memory.<name>]")
+                      help="What model calls see of the run's history; parameters in meta-mle.toml [memory.<name>]")
     init.add_argument("--prompts", help="Prompt set of controller, planner and writer (default: default); "
-                      "parameters in nano-mle.toml [prompts.<name>]")
+                      "parameters in meta-mle.toml [prompts.<name>]")
     init.add_argument("--max-expansions", type=int, default=6)
     init.add_argument("--max-explorations", type=int, help="Explorations (default: 8); 0 turns them off "
                       "and evaluation is locked without one")

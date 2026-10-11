@@ -1,10 +1,10 @@
 import json
 import sys
 
-from nano_mle.cli import main
-from nano_mle.memory import Experience, retrieve
-from nano_mle.runner import Runner
-from nano_mle.store import Store
+from meta_mle.cli import main
+from meta_mle.memory import Experience, retrieve
+from meta_mle.runner import Runner
+from meta_mle.store import Store
 from test_switches import Recording
 
 
@@ -69,7 +69,7 @@ def test_mlevolve_profile_runs_without_explorations(tmp_path, monkeypatch):
     (tmp_path / "task.json").write_text(json.dumps({"description": "Independent regression rows",
                                                     "sources": {"train": "train.csv"}, "target": "target"}))
     root = tmp_path / "workspace"
-    monkeypatch.setattr(sys, "argv", ["nano-mle", "init", str(root), "--task", str(tmp_path / "task.json"),
+    monkeypatch.setattr(sys, "argv", ["meta-mle", "init", str(root), "--task", str(tmp_path / "task.json"),
                                       "--profile", "mlevolve", "--max-expansions", "4", "--max-evaluations", "12"])
     main()
     backend = Recording(explore=False)

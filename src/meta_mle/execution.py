@@ -38,7 +38,7 @@ def run_plan(directory: Path, source: str, request: dict, timeout: int):
     started = time.monotonic()
     with (directory / "execution.log").open("w") as log:
         cores = allowed_cores()
-        child = subprocess.Popen([sys.executable, "-m", "nano_mle.worker", str(directory)],
+        child = subprocess.Popen([sys.executable, "-m", "meta_mle.worker", str(directory)],
                                  cwd=directory, env=env, stdout=log, stderr=log, start_new_session=True,
                                  preexec_fn=pin(cores))
         try:

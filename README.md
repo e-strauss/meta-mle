@@ -1,4 +1,4 @@
-# nano-mle
+# meta-mle
 
 A small, sequential harness for LLM-driven ML experimentation on tabular data.
 A language model proposes data explorations, an evaluation setup and pipeline
@@ -48,12 +48,12 @@ uv run pytest       # offline test suite, 8 processes by default (each gets its 
 3. **Initialise a workspace** (no model calls) and **run** it:
 
    ```bash
-   uv run nano-mle init workspaces/my-run --task task.json --policy greedy --memory window \
+   uv run meta-mle init workspaces/my-run --task task.json --policy greedy --memory window \
      --max-model-calls 30 --max-expansions 3 --max-explorations 4 \
      --max-evaluations 8 --max-repairs 2 --execution-timeout 1800 --time-budget 8h
-   uv run nano-mle run workspaces/my-run --model openai/gpt-6.1-sol
-   uv run nano-mle show workspaces/my-run
-   uv run nano-mle draw workspaces/my-run/artifacts/<step>/<attempt> > graph.svg
+   uv run meta-mle run workspaces/my-run --model openai/gpt-6.1-sol
+   uv run meta-mle show workspaces/my-run
+   uv run meta-mle draw workspaces/my-run/artifacts/<step>/<attempt> > graph.svg
    ```
 
    `--model` is any DSPy/LiteLLM model id. `run` also takes `--max-tokens`
@@ -75,9 +75,9 @@ workspace is immutable; use a new one for new budgets or evaluation rules.
 
 ## Configuration
 
-Harness settings live in `nano-mle.toml` at the repository root. It is gitignored;
-`nano-mle.example.toml` is the tracked template and holds the defaults, which apply
-when no local file exists. `NANO_MLE_CONFIG` points to another file. Each run records
+Harness settings live in `meta-mle.toml` at the repository root. It is gitignored;
+`meta-mle.example.toml` is the tracked template and holds the defaults, which apply
+when no local file exists. `META_MLE_CONFIG` points to another file. Each run records
 the configuration it used in its workspace metadata.
 
 | Setting | Default | Effect |
@@ -113,14 +113,14 @@ the older spelling) supplies default component choices. The `aide` profile selec
 `lean` prompt set, no explorations, no interpreter and the data overview:
 
 ```bash
-uv run nano-mle init workspaces/aide-run --task task.json --profile aide \
+uv run meta-mle init workspaces/aide-run --task task.json --profile aide \
   --max-expansions 20 --max-evaluations 80 --max-actions 40 --max-model-calls 160 \
   --execution-timeout 1800 --time-budget 8h
-uv run nano-mle run workspaces/aide-run --model openai/gpt-6.1-sol
+uv run meta-mle run workspaces/aide-run --model openai/gpt-6.1-sol
 ```
 
 ```bash
-uv run nano-mle init workspaces/mlevolve-run --task task.json --profile mlevolve \
+uv run meta-mle init workspaces/mlevolve-run --task task.json --profile mlevolve \
   --max-expansions 40 --max-evaluations 120 --max-actions 60 --max-model-calls 200 \
   --execution-timeout 1800 --time-budget 8h
 ```
@@ -172,7 +172,7 @@ reimplementation.
 **`aide`**, after the [AIDE paper](https://arxiv.org/html/2502.13138v1) and its code
 (`aide/agent.py`):
 
-| AIDE | nano-mle |
+| AIDE | meta-mle |
 |---|---|
 | Data preview, "Don't suggest to do EDA" | `--data-overview`, no explorations, no interpreter |
 | Draft until 5 drafts (failed ones count) | `aide` policy, `num_drafts = 5` |
@@ -198,7 +198,7 @@ edits, parallel workers.
 paper describes the mechanisms but gives no parameters, prompts or code, so the
 numbers are ours:
 
-| FM Agent | nano-mle |
+| FM Agent | meta-mle |
 |---|---|
 | Cold start: parallel generation agents with different directions | `num_islands * drafts_per_island` drafts (3 × 1), each told to differ from the others |
 | Islands, partitioned by similarity, evolving mostly independently | `islands` policy: drafts assigned in turn, islands evolved in turn, a child joins its parent's island |
@@ -248,8 +248,8 @@ Registered sets:
 Two layers decide where plan code runs:
 
 1. **How the runner is started.** A process may run on a set of CPUs (its affinity),
-   and children inherit it. Plain `uv run nano-mle run …` may use all CPUs;
-   `taskset -c <cpus> uv run nano-mle run …` restricts the runner and everything it
+   and children inherit it. Plain `uv run meta-mle run …` may use all CPUs;
+   `taskset -c <cpus> uv run meta-mle run …` restricts the runner and everything it
    starts.
 2. **The harness.** Each attempt runs in a worker subprocess pinned to the first
    `cpu_threads` CPUs of that set (`execution.allowed_cores`, `pin`), with OpenMP and
@@ -271,13 +271,13 @@ a core). Socket 0 holds 0–15 and 32–47, socket 1 holds 16–31 and 48–63.
 
 | Setup | Start | `cpu_threads` | Workers use |
 |---|---|---|---|
-| One run (recommended) | `uv run nano-mle run …` | 32 | 0–31: one thread on every core |
-| Two runs, one per socket | `taskset -c 0-15,32-47 uv run nano-mle run …` and `taskset -c 16-31,48-63 uv run nano-mle run …` | 16 | 0–15 and 16–31: one thread per core, memory local to the socket |
+| One run (recommended) | `uv run meta-mle run …` | 32 | 0–31: one thread on every core |
+| Two runs, one per socket | `taskset -c 0-15,32-47 uv run meta-mle run …` and `taskset -c 16-31,48-63 uv run meta-mle run …` | 16 | 0–15 and 16–31: one thread per core, memory local to the socket |
 | Two runs without `taskset` | — | any | the same first CPUs: they share cores and stall each other |
 
 Runs are normally sequential; the harness does not coordinate CPUs between runs.
 Start parallel runs with `taskset`, as above. If they need different settings, give
-each its own config file via `NANO_MLE_CONFIG`. A run with fewer cores gets less done
+each its own config file via `META_MLE_CONFIG`. A run with fewer cores gets less done
 within a time budget, so compare runs only on the same core layout.
 
 ## Submission
@@ -288,7 +288,7 @@ and writes the prediction file. `run --no-submit` skips it; `--submit-timeout`
 (default 7200 s) bounds its fit and predict. The submission runs outside the time and
 model-call budgets, and a failed submission leaves the run complete. Running a
 completed workspace again submits only if no submission succeeded yet.
-`nano-mle submit WORKSPACE --model MODEL [--candidate ID] [--task TASK.json]` does the
+`meta-mle submit WORKSPACE --model MODEL [--candidate ID] [--task TASK.json]` does the
 same on its own, e.g. for another candidate or an updated task file.
 
 The harness takes the best candidate (or the named one) and resolves its winning grid
@@ -311,7 +311,7 @@ re-implements or repairs. Repairs see the full traceback.
 
 ## How a run works
 
-![nano-mle run flow](docs/diagrams/run-flow.svg)
+![meta-mle run flow](docs/diagrams/run-flow.svg)
 
 [PNG for terminal viewing](docs/diagrams/run-flow.png) ·
 [D2 source](docs/diagrams/run-flow.d2) ·
@@ -370,7 +370,7 @@ A single loop dispatches one controller decision at a time:
 
 Who decides what, compared with a single-agent harness such as mle-claude:
 
-| Decision | mle-claude | nano-mle |
+| Decision | mle-claude | meta-mle |
 |---|---|---|
 | Next action (explore, lock evaluation, expand, probe, stop) | LLM | LLM controller, or auto after the lock |
 | Which candidate to build on | LLM | search policy (greedy / draft-greedy / MCTS / MCGS); the controller sees its pick before deciding |
@@ -379,10 +379,10 @@ Who decides what, compared with a single-agent harness such as mle-claude:
 | Turning outputs into findings | LLM | LLM interpreter |
 | Scoring and the evaluation lock | harness | harness |
 
-Who knows what. mle-claude is one agent with one continuous context; nano-mle's roles
+Who knows what. mle-claude is one agent with one continuous context; meta-mle's roles
 are stateless calls that see what the harness passes them:
 
-| Knowledge | mle-claude | nano-mle |
+| Knowledge | mle-claude | meta-mle |
 |---|---|---|
 | Task description and sources | the agent | every role (task and source manifest) |
 | Raw data | read directly, any slice | only through a plan's graph, evaluated by the harness |
@@ -436,7 +436,7 @@ class Memory(Protocol):
 | The harness adds the fixed parts (task, contract, budgets, counts, time, selected parent and references) and strips artifact paths after the view | a memory cannot hide the budget or expose earlier outputs |
 | `journal` is read-only; derived state (an index, summaries) must be rebuildable from it, fed by `observe` after each record write | resume works as for search policies |
 | `ask(context, instruction)` runs a journaled `summarize` call counted against `--max-model-calls` | a memory's own model use shows up in the budget |
-| Chosen at `init --memory <name>`, parameters from `[memory.<name>]` in `nano-mle.toml`, recorded in the workspace | the memory is an experimental variable, fixed for a run |
+| Chosen at `init --memory <name>`, parameters from `[memory.<name>]` in `meta-mle.toml`, recorded in the workspace | the memory is an experimental variable, fixed for a run |
 
 | Memory | View |
 |---|---|
@@ -717,11 +717,11 @@ still shows which phase was running.
 | `contracts.py` | Contract creation, hashing and drift comparison. |
 | `search.py` | Greedy, MCTS and MCGS policies and reward updates. |
 | `store.py` | SQLite journal. |
-| `config.py` | Loads `nano-mle.toml` (threads, grid parallelism, plan checks). |
+| `config.py` | Loads `meta-mle.toml` (threads, grid parallelism, plan checks). |
 | `timing.py` | Phase timer for workers. |
 | `libraries.py` | Repository-level record of imported-but-missing libraries. |
-| `submit.py` | Final refit of a candidate, prediction on new rows, format checks; used at the end of a run and by `nano-mle submit`. |
-| `draw.py` | `nano-mle draw ATTEMPT`: rebuilds a recorded plan lazily and prints its Skrub `draw_graph` SVG. |
+| `submit.py` | Final refit of a candidate, prediction on new rows, format checks; used at the end of a run and by `meta-mle submit`. |
+| `draw.py` | `meta-mle draw ATTEMPT`: rebuilds a recorded plan lazily and prints its Skrub `draw_graph` SVG. |
 
 `dashboard/` is an optional, harness-agnostic web UI for browsing runs, search trees
 and launching new runs (see its README). `FUTURE_IDEAS.md` collects design notes that

@@ -1,9 +1,9 @@
 import pytest
 
-from nano_mle.mlevolve import MLEvolve, branches
-from nano_mle.operators import patience
-from nano_mle.runner import Runner
-from nano_mle.store import Store
+from meta_mle.mlevolve import MLEvolve, branches
+from meta_mle.operators import patience
+from meta_mle.runner import Runner
+from meta_mle.store import Store
 from test_controllers import ExperimentBackend, workspace
 
 

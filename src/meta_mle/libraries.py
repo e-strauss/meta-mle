@@ -11,8 +11,8 @@ from pathlib import Path
 
 
 def record_path() -> Path:
-    if os.environ.get("NANO_MLE_MISSING_LIBRARIES"):
-        return Path(os.environ["NANO_MLE_MISSING_LIBRARIES"])
+    if os.environ.get("META_MLE_MISSING_LIBRARIES"):
+        return Path(os.environ["META_MLE_MISSING_LIBRARIES"])
     repo = Path(__file__).resolve().parents[2]
     return repo / "missing_libraries.json"
 

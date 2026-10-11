@@ -1,6 +1,6 @@
 # Meta-harness plan
 
-nano-mle becomes a meta-harness: each MLE agent is a **profile**, a composition of
+meta-mle becomes a meta-harness: each MLE agent is a **profile**, a composition of
 shared components, instead of a custom harness. Agents are reproduced in their
 core ideas, adapted to Skrub plans; deviations are documented per profile.
 
@@ -99,9 +99,9 @@ Source: paper (arXiv 2606.06473) and the reference implementation
 (`~/repos/MLEvolve`, `engine/node_selection.py`, `engine/evaluation.py`,
 `engine/conditions.py`, `agents/*_agent.py`, `agents/memory/`).
 
-Mapping (MLEvolve -> nano-mle):
+Mapping (MLEvolve -> meta-mle):
 
-| MLEvolve | nano-mle |
+| MLEvolve | meta-mle |
 |---|---|
 | Static data preview, no EDA ("Don't suggest to do EDA") | `--data-overview`, `--max-explorations 0`, `--no-interpreter` |
 | Train/val split written by the coder in each solution | Locked evaluation, written once before search (kept) |

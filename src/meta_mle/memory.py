@@ -7,7 +7,7 @@ with the error, the interpreter with the exploration question. The harness adds 
 fixed parts (task, contract, budgets, counts, time, selected parent) and strips
 artifact paths afterwards, so a memory cannot hide the budget or expose files.
 
-A memory is chosen at init (--memory) with its parameters from nano-mle.toml's
+A memory is chosen at init (--memory) with its parameters from meta-mle.toml's
 [memory.<name>] and recorded in the workspace, so a resumed run keeps it. Any state a
 memory derives (an index, summaries) must be rebuildable from the journal. A memory
 may ask the model through `ask(context, instruction)`, which the runner binds to a

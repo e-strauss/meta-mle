@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 // Stateless session: a signed (HS256) cookie holding only the user name and
 // expiry. Changing SESSION_SECRET (set-password does) logs every session out.
 
-export const SESSION_COOKIE = "nano_dashboard_session";
+export const SESSION_COOKIE = "meta_dashboard_session";
 const MAX_AGE_S = 7 * 24 * 60 * 60;
 
 function key(): Uint8Array {

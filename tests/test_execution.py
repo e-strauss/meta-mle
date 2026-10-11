@@ -1,6 +1,6 @@
 import json
 
-from nano_mle.execution import run_plan
+from meta_mle.execution import run_plan
 
 
 def test_worker_timeout_is_recorded(tmp_path):
@@ -14,9 +14,9 @@ def test_worker_timeout_is_recorded(tmp_path):
 def test_named_outputs_share_one_evaluation(tmp_path, monkeypatch):
     import pandas as pd
     import skrub
-    from nano_mle import worker
-    from nano_mle.timing import Phases
-    from nano_mle.worker import evaluate_outputs
+    from meta_mle import worker
+    from meta_mle.timing import Phases
+    from meta_mle.worker import evaluate_outputs
 
     # The counting reader is a custom callable, which plan graphs reject; skip that check here.
     monkeypatch.setattr(worker, "graph_artifact", lambda plan, path: None)
@@ -42,7 +42,7 @@ def test_boundary_audit_evaluates_sources_once(tmp_path, monkeypatch):
     import pandas as pd
     import skrub
     from sklearn.model_selection import KFold
-    from nano_mle import evaluation, graphs
+    from meta_mle import evaluation, graphs
 
     reads = []
 
@@ -64,7 +64,7 @@ def test_draw_rebuilds_pipeline_graph_without_reading_data(tmp_path):
     import shutil
 
     import pytest
-    from nano_mle.draw import draw_svg
+    from meta_mle.draw import draw_svg
 
     if shutil.which("dot") is None:
         pytest.skip("graphviz not installed")
@@ -92,8 +92,8 @@ def test_workers_are_pinned_to_cpu_threads_cores():
     import os
     import subprocess
     import sys
-    from nano_mle.config import cpu_threads
-    from nano_mle.execution import allowed_cores, pin
+    from meta_mle.config import cpu_threads
+    from meta_mle.execution import allowed_cores, pin
 
     assert len(allowed_cores()) == min(cpu_threads(), len(os.sched_getaffinity(0)))
     one = {min(os.sched_getaffinity(0))}

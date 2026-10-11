@@ -1,13 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from nano_mle import operators
-from nano_mle.graphs import blocks
-from nano_mle.models import Decision
-from nano_mle.operators import Operator, operator
-from nano_mle.runner import Runner
-from nano_mle.search import Selection, valid
-from nano_mle.store import Store
+from meta_mle import operators
+from meta_mle.graphs import blocks
+from meta_mle.models import Decision
+from meta_mle.operators import Operator, operator
+from meta_mle.runner import Runner
+from meta_mle.search import Selection, valid
+from meta_mle.store import Store
 from scripted import ScriptedBackend, make_scripted_run
 from test_controllers import ExperimentBackend, workspace
 
