@@ -1,0 +1,11 @@
+{
+  "description": "# Task\n\nPredict each student's health condition (`health_condition`: a class such as healthy, at-risk or unhealthy) from tabular health and lifestyle records.\n\n# Metric\n\nSubmissions are evaluated on balanced accuracy between the predicted class and the observed target.\n\n# Submission format\n\nA CSV with a header row and columns `id`, `health_condition`: one row per test id with the predicted class label, e.g.\n\n```\nid,health_condition\n690088,at-risk\n690089,at-risk\netc.\n```\n\n# Data files\n\nThe dataset is stored in Google Cloud Storage at:\ngs://mle-trajectories-data/playground-series-s6e7/input\n\n- `train.csv` - the training set (690,088 rows), with `health_condition` as target and `id` as identifier\n- `test.csv` - the test set (295,753 rows); predict `health_condition` for each `id`\n- `sample_submission.csv` - a sample submission file in the correct format\n\nRead the data directly from GCS using the agent reader's Application Default Credentials (ADC), e.g.\n\n```python\nimport pandas as pd\nroot = \"gs://mle-trajectories-data/playground-series-s6e7/input\"\ntrain = pd.read_csv(f\"{root}/train.csv\")\ntest = pd.read_csv(f\"{root}/test.csv\")\n```\n",
+  "sources": {
+    "train": "gs://mle-trajectories-data/playground-series-s6e7/input/train.csv",
+    "test": "gs://mle-trajectories-data/playground-series-s6e7/input/test.csv",
+    "sample_submission": "gs://mle-trajectories-data/playground-series-s6e7/input/sample_submission.csv"
+  },
+  "train_source": "train",
+  "target": "health_condition",
+  "drop_columns": []
+}
