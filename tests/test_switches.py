@@ -10,7 +10,7 @@ from scripted import ScriptedBackend
 
 
 def test_overview_summarises_tables_and_directories(tmp_path):
-    pd.DataFrame({"a": [1, 2, None], "b": ["x", "y", "x"]}).to_csv(tmp_path / "t.csv", index=False)
+    pd.DataFrame({"a": [1, 2, None], "b": ["x", None, "x"]}).to_csv(tmp_path / "t.csv", index=False)
     pd.DataFrame({"c": [1.0, 2.0]}).to_parquet(tmp_path / "t.parquet")
     (tmp_path / "images").mkdir()
     for name in ("1.png", "2.png", "notes.txt"):
@@ -24,6 +24,8 @@ def test_overview_summarises_tables_and_directories(tmp_path):
     assert overview["parquet"]["rows"] == 2 and overview["parquet"]["columns"][0]["name"] == "c"
     assert overview["images"]["files"] == 3 and overview["images"]["extensions"] == {".png": 2, ".txt": 1}
     assert "FileNotFoundError" in overview["missing"]["error"]
+    assert overview["csv"]["head"][1] == {"a": "2.0", "b": None}  # missing values are null, not NaN
+    json.dumps(overview, allow_nan=False)
 
 
 class Recording(ScriptedBackend):

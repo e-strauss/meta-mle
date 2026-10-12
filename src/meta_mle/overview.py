@@ -14,6 +14,10 @@ MAX_COLUMNS = 200
 
 
 def table_summary(frame, rows=None):
+    """Column statistics and the first rows as strings; missing values are None, so the
+    summary is valid JSON."""
+    import pandas as pd
+
     columns = []
     for name in list(frame.columns)[:MAX_COLUMNS]:
         series = frame[name]
@@ -24,7 +28,8 @@ def table_summary(frame, rows=None):
             column.update(min=float(series.min()), max=float(series.max()), mean=float(series.mean()))
         columns.append(column)
     return {"rows": rows, "sampled_rows": len(frame), "columns_total": frame.shape[1],
-            "columns": columns, "head": frame.head(HEAD_ROWS).astype(str).to_dict(orient="records")}
+            "columns": columns, "head": [{str(k): None if pd.isna(v) else str(v) for k, v in row.items()}
+                                         for row in frame.head(HEAD_ROWS).to_dict(orient="records")]}
 
 
 def listing(location):
